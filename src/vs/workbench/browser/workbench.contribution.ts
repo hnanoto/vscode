@@ -33,8 +33,7 @@ const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Con
 		'properties': {
 			'workbench.externalBrowser': {
 				type: 'string',
-				default: 'chrome',
-				markdownDescription: localize('browser', "Configure the browser to use for opening http or https links externally. This can either be the name of the browser (`edge`, `chrome`, `firefox`) or an absolute path to the browser's executable. Defaults to `chrome`. If unavailable, falls back to the system browser."),
+				markdownDescription: localize('browser', "Configure the browser to use for opening http or https links externally. This can either be the name of the browser (`edge`, `chrome`, `firefox`) or an absolute path to the browser's executable. Will use the system default if not set."),
 				included: isNative,
 				restricted: true
 			},
