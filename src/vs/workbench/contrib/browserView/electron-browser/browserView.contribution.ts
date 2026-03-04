@@ -160,7 +160,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 		},
 		'workbench.browser.enableChatTools': {
 			type: 'boolean',
-			default: false,
+			default: true,
 			experiment: { mode: 'startup' },
 			tags: ['experimental'],
 			markdownDescription: localize(

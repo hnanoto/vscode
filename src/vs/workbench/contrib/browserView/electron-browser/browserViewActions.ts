@@ -39,6 +39,10 @@ class OpenIntegratedBrowserAction extends Action2 {
 		super({
 			id: 'workbench.action.browser.open',
 			title: localize2('browser.openAction', "Open Integrated Browser"),
+			icon: Codicon.globe,
+			menu: [
+				{ id: MenuId.CommandCenter, order: 4 }
+			],
 			category: BrowserCategory,
 			f1: true
 		});
