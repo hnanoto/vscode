@@ -16,7 +16,7 @@ jobs:
   linux:
     name: Linux Installers
     runs-on: ubuntu-22.04
-    timeout-minutes: 120
+    timeout-minutes: 180
     env:
       NPM_ARCH: x64
       VSCODE_ARCH: x64
@@ -36,8 +36,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          set -euo pipefail
-          source ./build/azure-pipelines/linux/setup-env.sh
+          set -e
 
           for i in {1..5}; do
             npm ci && break
@@ -71,6 +70,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
+      - name: Compile (core-ci)
+        run: npm run gulp core-ci
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
       - name: Build Linux installers
         run: |
           set -euo pipefail
@@ -101,7 +105,7 @@ jobs:
   macOS:
     name: macOS Installers
     runs-on: macos-14
-    timeout-minutes: 120
+    timeout-minutes: 180
     env:
       NPM_ARCH: arm64
       VSCODE_ARCH: arm64
@@ -152,6 +156,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
+      - name: Compile (core-ci)
+        run: npm run gulp core-ci
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
       - name: Build macOS installers
         run: |
           set -euo pipefail
@@ -178,7 +187,7 @@ jobs:
   windows:
     name: Windows Installers
     runs-on: windows-2022
-    timeout-minutes: 120
+    timeout-minutes: 180
     env:
       NPM_ARCH: x64
       VSCODE_ARCH: x64
@@ -235,6 +244,15 @@ jobs:
         if: steps.cache-builtin-extensions.outputs.cache-hit != 'true'
         shell: pwsh
         run: node build/lib/builtInExtensions.ts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Compile (core-ci)
+        shell: pwsh
+        run: |
+          . build/azure-pipelines/win32/exec.ps1
+          $ErrorActionPreference = "Stop"
+          exec { npm run gulp core-ci }
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
