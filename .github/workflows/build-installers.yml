@@ -32,7 +32,7 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt update -y
-          sudo apt install -y build-essential pkg-config libx11-dev libx11-xcb-dev libxkbfile-dev libnotify-bin libkrb5-dev fakeroot rpm
+          sudo apt install -y build-essential pkg-config libx11-dev libx11-xcb-dev libxkbfile-dev libnotify-bin libkrb5-dev fakeroot rpm python3 python-is-python3
 
       - name: Install dependencies
         run: |
@@ -78,6 +78,7 @@ jobs:
       - name: Build Linux installers
         run: |
           set -euo pipefail
+          source ./build/azure-pipelines/linux/setup-env.sh
           mkdir -p .build/artifacts/linux
 
           npm run gulp "vscode-linux-${VSCODE_ARCH}-min-ci"
@@ -105,6 +106,8 @@ jobs:
 
           ls -lah .build/artifacts/linux
         env:
+          npm_config_arch: ${{ env.NPM_ARCH }}
+          VSCODE_ARCH: ${{ env.VSCODE_ARCH }}
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: Upload Linux installers
@@ -115,12 +118,22 @@ jobs:
           if-no-files-found: error
 
   macOS:
-    name: macOS Installers
-    runs-on: macos-14
+    name: macOS Installers (${{ matrix.vscode_arch }})
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            npm_arch: arm64
+            vscode_arch: arm64
+          - runner: macos-13
+            npm_arch: x64
+            vscode_arch: x64
     env:
-      NPM_ARCH: arm64
-      VSCODE_ARCH: arm64
+      NPM_ARCH: ${{ matrix.npm_arch }}
+      VSCODE_ARCH: ${{ matrix.vscode_arch }}
     steps:
       - name: Checkout microsoft/vscode
         uses: actions/checkout@v6
