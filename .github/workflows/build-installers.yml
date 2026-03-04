@@ -1,0 +1,266 @@
+name: Code OSS (installers)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions: {}
+
+env:
+  ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+
+jobs:
+  linux:
+    name: Linux Installers
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    env:
+      NPM_ARCH: x64
+      VSCODE_ARCH: x64
+    steps:
+      - name: Checkout microsoft/vscode
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install build tools
+        run: |
+          sudo apt update -y
+          sudo apt install -y build-essential pkg-config libx11-dev libx11-xcb-dev libxkbfile-dev libnotify-bin libkrb5-dev fakeroot rpm
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          source ./build/azure-pipelines/linux/setup-env.sh
+
+          for i in {1..5}; do
+            npm ci && break
+            if [ "$i" -eq 5 ]; then
+              echo "npm ci failed too many times" >&2
+              exit 1
+            fi
+            echo "npm ci failed attempt $i, retrying..."
+          done
+        env:
+          npm_config_arch: ${{ env.NPM_ARCH }}
+          VSCODE_ARCH: ${{ env.VSCODE_ARCH }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Prepare built-in extensions cache key
+        run: |
+          mkdir -p .build
+          node build/azure-pipelines/common/computeBuiltInDepsCacheKey.ts > .build/builtindepshash
+
+      - name: Restore built-in extensions cache
+        id: cache-builtin-extensions
+        uses: actions/cache@v5
+        with:
+          enableCrossOsArchive: true
+          path: .build/builtInExtensions
+          key: "builtin-extensions-${{ hashFiles('.build/builtindepshash') }}"
+
+      - name: Download built-in extensions
+        if: steps.cache-builtin-extensions.outputs.cache-hit != 'true'
+        run: node build/lib/builtInExtensions.ts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Build Linux installers
+        run: |
+          set -euo pipefail
+          mkdir -p .build/artifacts/linux
+
+          npm run gulp "vscode-linux-${VSCODE_ARCH}-min-ci"
+          tar -czf ".build/artifacts/linux/VSCode-linux-${VSCODE_ARCH}.tar.gz" -C .. "VSCode-linux-${VSCODE_ARCH}"
+
+          npm run gulp "vscode-linux-${VSCODE_ARCH}-prepare-deb"
+          npm run gulp "vscode-linux-${VSCODE_ARCH}-build-deb"
+          cp .build/linux/deb/*/deb/*.deb .build/artifacts/linux/
+
+          npm run gulp "vscode-linux-${VSCODE_ARCH}-prepare-rpm"
+          npm run gulp "vscode-linux-${VSCODE_ARCH}-build-rpm"
+          cp .build/linux/rpm/*/*.rpm .build/artifacts/linux/
+
+          ls -lah .build/artifacts/linux
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Upload Linux installers
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ format('vscode-installers-linux-{0}-{1}', env.VSCODE_ARCH, github.run_attempt) }}
+          path: .build/artifacts/linux
+          if-no-files-found: error
+
+  macOS:
+    name: macOS Installers
+    runs-on: macos-14
+    timeout-minutes: 120
+    env:
+      NPM_ARCH: arm64
+      VSCODE_ARCH: arm64
+    steps:
+      - name: Checkout microsoft/vscode
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          python3 -m pip install --break-system-packages setuptools
+
+          for i in {1..5}; do
+            npm ci && break
+            if [ "$i" -eq 5 ]; then
+              echo "npm ci failed too many times" >&2
+              exit 1
+            fi
+            echo "npm ci failed attempt $i, retrying..."
+          done
+        env:
+          npm_config_arch: ${{ env.NPM_ARCH }}
+          VSCODE_ARCH: ${{ env.VSCODE_ARCH }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GYP_DEFINES: "kerberos_use_rtld=false"
+
+      - name: Prepare built-in extensions cache key
+        run: |
+          mkdir -p .build
+          node build/azure-pipelines/common/computeBuiltInDepsCacheKey.ts > .build/builtindepshash
+
+      - name: Restore built-in extensions cache
+        id: cache-builtin-extensions
+        uses: actions/cache@v5
+        with:
+          enableCrossOsArchive: true
+          path: .build/builtInExtensions
+          key: "builtin-extensions-${{ hashFiles('.build/builtindepshash') }}"
+
+      - name: Download built-in extensions
+        if: steps.cache-builtin-extensions.outputs.cache-hit != 'true'
+        run: node build/lib/builtInExtensions.ts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Build macOS installers
+        run: |
+          set -euo pipefail
+          mkdir -p .build/artifacts/macos
+
+          npm run gulp "vscode-darwin-${VSCODE_ARCH}-min-ci"
+
+          ARCHIVE_PATH="$PWD/.build/artifacts/macos/VSCode-darwin-${VSCODE_ARCH}.zip"
+          (cd "../VSCode-darwin-${VSCODE_ARCH}" && zip -Xry "$ARCHIVE_PATH" *)
+
+          VSCODE_QUALITY=stable node build/darwin/create-dmg.ts "$(dirname "$PWD")" "$PWD/.build/artifacts/macos"
+
+          ls -lah .build/artifacts/macos
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Upload macOS installers
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ format('vscode-installers-macos-{0}-{1}', env.VSCODE_ARCH, github.run_attempt) }}
+          path: .build/artifacts/macos
+          if-no-files-found: error
+
+  windows:
+    name: Windows Installers
+    runs-on: windows-2022
+    timeout-minutes: 120
+    env:
+      NPM_ARCH: x64
+      VSCODE_ARCH: x64
+    steps:
+      - name: Checkout microsoft/vscode
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          . build/azure-pipelines/win32/exec.ps1
+          $ErrorActionPreference = "Stop"
+
+          for ($i = 1; $i -le 5; $i++) {
+            try {
+              exec { npm ci }
+              break
+            }
+            catch {
+              if ($i -eq 5) {
+                Write-Error "npm ci failed after 5 attempts"
+                throw
+              }
+              Write-Host "npm ci failed attempt $i, retrying..."
+              Start-Sleep -Seconds 2
+            }
+          }
+        env:
+          npm_config_arch: ${{ env.NPM_ARCH }}
+          npm_config_foreground_scripts: "true"
+          VSCODE_ARCH: ${{ env.VSCODE_ARCH }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Prepare built-in extensions cache key
+        shell: pwsh
+        run: |
+          mkdir .build -ea 0
+          node build/azure-pipelines/common/computeBuiltInDepsCacheKey.ts > .build/builtindepshash
+
+      - name: Restore built-in extensions cache
+        id: cache-builtin-extensions
+        uses: actions/cache@v5
+        with:
+          enableCrossOsArchive: true
+          path: .build/builtInExtensions
+          key: "builtin-extensions-${{ hashFiles('.build/builtindepshash') }}"
+
+      - name: Download built-in extensions
+        if: steps.cache-builtin-extensions.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: node build/lib/builtInExtensions.ts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Build Windows installers
+        shell: pwsh
+        run: |
+          . build/azure-pipelines/win32/exec.ps1
+          $ErrorActionPreference = "Stop"
+          mkdir .build\artifacts\windows -ea 0
+
+          exec { npm run gulp "vscode-win32-$env:VSCODE_ARCH-min-ci" }
+          exec { npm run gulp "vscode-win32-$env:VSCODE_ARCH-inno-updater" }
+          exec { npm run gulp "vscode-win32-$env:VSCODE_ARCH-system-setup" }
+          exec { npm run gulp "vscode-win32-$env:VSCODE_ARCH-user-setup" }
+
+          exec { 7z.exe a -tzip ".build\artifacts\windows\VSCode-win32-$env:VSCODE_ARCH.zip" "..\VSCode-win32-$env:VSCODE_ARCH\*" "-xr!CodeSignSummary*.md" }
+          Copy-Item ".build\win32-$env:VSCODE_ARCH\system-setup\VSCodeSetup.exe" ".build\artifacts\windows\VSCodeSetup-$env:VSCODE_ARCH.exe" -Force
+          Copy-Item ".build\win32-$env:VSCODE_ARCH\user-setup\VSCodeSetup.exe" ".build\artifacts\windows\VSCodeUserSetup-$env:VSCODE_ARCH.exe" -Force
+
+          Get-ChildItem .build\artifacts\windows | Format-Table Name, Length
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Upload Windows installers
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ format('vscode-installers-windows-{0}-{1}', env.VSCODE_ARCH, github.run_attempt) }}
+          path: .build/artifacts/windows
+          if-no-files-found: error
