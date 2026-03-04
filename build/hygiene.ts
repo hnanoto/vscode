@@ -37,8 +37,8 @@ export function hygiene(some: NodeJS.ReadWriteStream | string[] | undefined, run
 	const productJson = es.through(function (file: VinylFile) {
 		const product = JSON.parse(file.contents!.toString('utf8'));
 
-		if (product.extensionsGallery) {
-			console.error(`product.json: Contains 'extensionsGallery'`);
+		if (product.extensionsGallery?.serviceUrl && /(?:marketplace\.visualstudio\.com|marketplace\.vsallin\.net)/i.test(product.extensionsGallery.serviceUrl)) {
+			console.error(`product.json: Uses Microsoft marketplace in 'extensionsGallery.serviceUrl', which is not allowed in this repo`);
 			errorCount++;
 		}
 
