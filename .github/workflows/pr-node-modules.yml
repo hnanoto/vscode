@@ -156,6 +156,14 @@ jobs:
           mkdir -p .build/node_modules_cache
           tar -czf .build/node_modules_cache/cache.tgz --files-from .build/node_modules_list.txt
 
+      - name: Upload Linux node_modules artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ format('node-modules-linux-{0}-{1}', env.VSCODE_ARCH, github.run_attempt) }}
+          path: .build/node_modules_cache
+          if-no-files-found: warn
+
   macOS:
     name: macOS
     runs-on: macos-14
@@ -216,6 +224,14 @@ jobs:
           node build/azure-pipelines/common/listNodeModules.ts .build/node_modules_list.txt
           mkdir -p .build/node_modules_cache
           tar -czf .build/node_modules_cache/cache.tgz --files-from .build/node_modules_list.txt
+
+      - name: Upload macOS node_modules artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ format('node-modules-macos-{0}-{1}', env.VSCODE_ARCH, github.run_attempt) }}
+          path: .build/node_modules_cache
+          if-no-files-found: warn
 
   windows:
     name: Windows
@@ -283,3 +299,11 @@ jobs:
           exec { node build/azure-pipelines/common/listNodeModules.ts .build/node_modules_list.txt }
           exec { mkdir -Force .build/node_modules_cache }
           exec { 7z.exe a .build/node_modules_cache/cache.7z -mx3 `@.build/node_modules_list.txt }
+
+      - name: Upload Windows node_modules artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ format('node-modules-windows-{0}-{1}', env.VSCODE_ARCH, github.run_attempt) }}
+          path: .build/node_modules_cache
+          if-no-files-found: warn
