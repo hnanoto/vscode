@@ -83,13 +83,25 @@ jobs:
           npm run gulp "vscode-linux-${VSCODE_ARCH}-min-ci"
           tar -czf ".build/artifacts/linux/VSCode-linux-${VSCODE_ARCH}.tar.gz" -C .. "VSCode-linux-${VSCODE_ARCH}"
 
-          npm run gulp "vscode-linux-${VSCODE_ARCH}-prepare-deb"
-          npm run gulp "vscode-linux-${VSCODE_ARCH}-build-deb"
-          cp .build/linux/deb/*/deb/*.deb .build/artifacts/linux/
+          if npm run gulp "vscode-linux-${VSCODE_ARCH}-prepare-deb" && npm run gulp "vscode-linux-${VSCODE_ARCH}-build-deb"; then
+            if ls .build/linux/deb/*/deb/*.deb >/dev/null 2>&1; then
+              cp .build/linux/deb/*/deb/*.deb .build/artifacts/linux/
+            else
+              echo "::warning::No .deb files were generated."
+            fi
+          else
+            echo "::warning::Deb package build failed; continuing with tar.gz installer."
+          fi
 
-          npm run gulp "vscode-linux-${VSCODE_ARCH}-prepare-rpm"
-          npm run gulp "vscode-linux-${VSCODE_ARCH}-build-rpm"
-          cp .build/linux/rpm/*/*.rpm .build/artifacts/linux/
+          if npm run gulp "vscode-linux-${VSCODE_ARCH}-prepare-rpm" && npm run gulp "vscode-linux-${VSCODE_ARCH}-build-rpm"; then
+            if ls .build/linux/rpm/*/*.rpm >/dev/null 2>&1; then
+              cp .build/linux/rpm/*/*.rpm .build/artifacts/linux/
+            else
+              echo "::warning::No .rpm files were generated."
+            fi
+          else
+            echo "::warning::RPM package build failed; continuing with available installers."
+          fi
 
           ls -lah .build/artifacts/linux
         env:
