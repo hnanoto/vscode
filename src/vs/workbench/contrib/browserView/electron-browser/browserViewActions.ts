@@ -20,6 +20,7 @@ import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
 import { logBrowserOpen } from '../../../../platform/browserView/common/browserViewTelemetry.js';
+import { FileAccess } from '../../../../base/common/network.js';
 
 // Context key expression to check if browser editor is active
 const BROWSER_EDITOR_ACTIVE = ContextKeyExpr.equals('activeEditor', BrowserEditor.ID);
@@ -28,6 +29,10 @@ const BrowserCategory = localize2('browserCategory', "Browser");
 const ActionGroupTabs = '1_tabs';
 const ActionGroupPage = '2_page';
 const ActionGroupSettings = '3_settings';
+const OpenIntegratedBrowserIcon = {
+	light: FileAccess.asFileUri('vs/workbench/contrib/browserView/electron-browser/media/chrome-light.svg'),
+	dark: FileAccess.asFileUri('vs/workbench/contrib/browserView/electron-browser/media/chrome-dark.svg')
+};
 
 interface IOpenBrowserOptions {
 	url?: string;
@@ -39,7 +44,7 @@ class OpenIntegratedBrowserAction extends Action2 {
 		super({
 			id: 'workbench.action.browser.open',
 			title: localize2('browser.openAction', "Open Integrated Browser"),
-			icon: Codicon.globe,
+			icon: OpenIntegratedBrowserIcon,
 			menu: [
 				{ id: MenuId.CommandCenter, order: 4 }
 			],
