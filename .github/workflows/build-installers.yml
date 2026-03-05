@@ -348,8 +348,10 @@ jobs:
           set -euo pipefail
           TAG="hcode-${GITHUB_SHA::12}"
           VERSION="$(node -p "require('./package.json').version")"
+          QUALITY="$(node -p "require('./product.json').quality || 'stable'")"
           echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "quality=${QUALITY}" >> "${GITHUB_OUTPUT}"
 
       - name: Create or update GitHub release
         env:
@@ -402,7 +404,7 @@ jobs:
             --tag "${{ steps.release_meta.outputs.tag }}" \
             --commit "${GITHUB_SHA}" \
             --version "${{ steps.release_meta.outputs.version }}" \
-            --quality stable \
+            --quality "${{ steps.release_meta.outputs.quality }}" \
             --max-history 300
 
       - name: Publish update feed to gh-pages
