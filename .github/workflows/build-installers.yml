@@ -307,3 +307,118 @@ jobs:
           name: ${{ format('vscode-installers-windows-{0}-{1}', env.VSCODE_ARCH, github.run_attempt) }}
           path: .build/artifacts/windows
           if-no-files-found: error
+
+  publish:
+    name: Publish Release + Update Feed
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    needs:
+      - linux
+      - macOS
+      - windows
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout microsoft/vscode
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      - name: Download all installers
+        uses: actions/download-artifact@v6
+        with:
+          pattern: vscode-installers-*
+          path: .build/release-artifacts
+          merge-multiple: true
+
+      - name: Show downloaded installer files
+        run: |
+          set -euo pipefail
+          find .build/release-artifacts -maxdepth 2 -type f | sort
+
+      - name: Build release metadata
+        id: release_meta
+        run: |
+          set -euo pipefail
+          TAG="hcode-${GITHUB_SHA::12}"
+          VERSION="$(node -p "require('./package.json').version")"
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mapfile -t FILES < <(find .build/release-artifacts -type f | sort)
+          if [ "${#FILES[@]}" -eq 0 ]; then
+            echo "No release files were found." >&2
+            exit 1
+          fi
+
+          TAG="${{ steps.release_meta.outputs.tag }}"
+          TITLE="HCode ${TAG}"
+          NOTES="Automated HCode installers for commit ${GITHUB_SHA}."
+
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" "${FILES[@]}" --clobber
+            gh release edit "${TAG}" --title "${TITLE}" --notes "${NOTES}" --latest
+          else
+            gh release create "${TAG}" "${FILES[@]}" --title "${TITLE}" --notes "${NOTES}"
+            gh release edit "${TAG}" --latest
+          fi
+
+      - name: Prepare gh-pages checkout
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf .build/gh-pages .build/update-feed
+          REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          if git ls-remote --exit-code --heads "${REPO_URL}" gh-pages >/dev/null 2>&1; then
+            git clone --depth=1 --branch gh-pages "${REPO_URL}" .build/gh-pages
+          else
+            mkdir -p .build/gh-pages
+            git init .build/gh-pages
+            git -C .build/gh-pages checkout -b gh-pages
+            git -C .build/gh-pages remote add origin "${REPO_URL}"
+          fi
+
+      - name: Generate update feed files
+        run: |
+          set -euo pipefail
+          node .github/scripts/generate-update-feed.mjs \
+            --artifacts-dir .build/release-artifacts \
+            --existing-feed-dir .build/gh-pages \
+            --output-dir .build/update-feed \
+            --repo "${GITHUB_REPOSITORY}" \
+            --tag "${{ steps.release_meta.outputs.tag }}" \
+            --commit "${GITHUB_SHA}" \
+            --version "${{ steps.release_meta.outputs.version }}" \
+            --quality stable \
+            --max-history 300
+
+      - name: Publish update feed to gh-pages
+        run: |
+          set -euo pipefail
+          rsync -a --delete --exclude '.git' .build/update-feed/ .build/gh-pages/
+          touch .build/gh-pages/.nojekyll
+
+          git -C .build/gh-pages config user.name "github-actions[bot]"
+          git -C .build/gh-pages config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C .build/gh-pages add -A
+
+          if git -C .build/gh-pages diff --cached --quiet; then
+            echo "No update feed changes to publish."
+            exit 0
+          fi
+
+          git -C .build/gh-pages commit -m "chore: update feed for ${GITHUB_SHA::7}"
+          git -C .build/gh-pages push origin gh-pages

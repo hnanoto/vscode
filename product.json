@@ -1,8 +1,11 @@
 {
 	"nameShort": "HCode",
 	"nameLong": "HCode",
+	"quality": "stable",
 	"applicationName": "hcode",
 	"dataFolderName": ".hcode",
+	"updateUrl": "https://hnanoto.github.io/vscode",
+	"downloadUrl": "https://github.com/hnanoto/vscode/releases/latest",
 	"win32MutexName": "hcode",
 	"licenseName": "MIT",
 	"licenseUrl": "https://github.com/microsoft/vscode/blob/main/LICENSE.txt",
