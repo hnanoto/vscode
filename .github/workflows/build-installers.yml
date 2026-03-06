@@ -186,12 +186,85 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
-      - name: Build macOS installers
+      - name: Build macOS app
+        run: |
+          set -euo pipefail
+
+          npm run gulp "vscode-darwin-${VSCODE_ARCH}-min-ci"
+
+          APP_NAME="$(node -p "require('./product.json').nameLong + '.app'")"
+          APP_PATH="$PWD/../VSCode-darwin-${VSCODE_ARCH}/${APP_NAME}"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "macOS app not found: $APP_PATH" >&2
+            exit 1
+          fi
+          ls -lah "$APP_PATH"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Setup macOS signing keychain
+        id: macos_signing
+        if: ${{ secrets.HCODE_MACOS_CERT_P12_BASE64 != '' && secrets.HCODE_MACOS_CERT_PASSWORD != '' && secrets.HCODE_MACOS_SIGN_IDENTITY != '' }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/buildagent.keychain"
+          CERT_PATH="$RUNNER_TEMP/hcode-macos-cert.p12"
+
+          echo "$HCODE_MACOS_CERT_P12_BASE64" | base64 -D > "$CERT_PATH"
+
+          security create-keychain -p pwd "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p pwd "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$HCODE_MACOS_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k pwd "$KEYCHAIN_PATH"
+
+          echo "codesign_identity=$HCODE_MACOS_SIGN_IDENTITY" >> "$GITHUB_OUTPUT"
+        env:
+          HCODE_MACOS_CERT_P12_BASE64: ${{ secrets.HCODE_MACOS_CERT_P12_BASE64 }}
+          HCODE_MACOS_CERT_PASSWORD: ${{ secrets.HCODE_MACOS_CERT_PASSWORD }}
+          HCODE_MACOS_SIGN_IDENTITY: ${{ secrets.HCODE_MACOS_SIGN_IDENTITY }}
+
+      - name: Sign macOS app
+        if: steps.macos_signing.outcome == 'success'
+        run: |
+          set -euo pipefail
+          node build/darwin/sign.ts "$(dirname "$PWD")"
+
+          APP_NAME="$(node -p "require('./product.json').nameLong + '.app'")"
+          APP_PATH="$PWD/../VSCode-darwin-${VSCODE_ARCH}/${APP_NAME}"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+        env:
+          AGENT_TEMPDIRECTORY: ${{ runner.temp }}
+          CODESIGN_IDENTITY: ${{ steps.macos_signing.outputs.codesign_identity }}
+
+      - name: Notarize and staple macOS app
+        if: ${{ steps.macos_signing.outcome == 'success' && secrets.HCODE_MACOS_NOTARY_APPLE_ID != '' && secrets.HCODE_MACOS_NOTARY_APP_PASSWORD != '' && secrets.HCODE_MACOS_NOTARY_TEAM_ID != '' }}
+        run: |
+          set -euo pipefail
+          APP_NAME="$(node -p "require('./product.json').nameLong + '.app'")"
+          APP_PATH="$PWD/../VSCode-darwin-${VSCODE_ARCH}/${APP_NAME}"
+          NOTARY_ZIP="$RUNNER_TEMP/hcode-notary-${VSCODE_ARCH}.zip"
+
+          rm -f "$NOTARY_ZIP"
+          ditto -c -k --keepParent "$APP_PATH" "$NOTARY_ZIP"
+
+          xcrun notarytool submit "$NOTARY_ZIP" \
+            --apple-id "$HCODE_MACOS_NOTARY_APPLE_ID" \
+            --password "$HCODE_MACOS_NOTARY_APP_PASSWORD" \
+            --team-id "$HCODE_MACOS_NOTARY_TEAM_ID" \
+            --wait
+
+          xcrun stapler staple "$APP_PATH"
+        env:
+          HCODE_MACOS_NOTARY_APPLE_ID: ${{ secrets.HCODE_MACOS_NOTARY_APPLE_ID }}
+          HCODE_MACOS_NOTARY_APP_PASSWORD: ${{ secrets.HCODE_MACOS_NOTARY_APP_PASSWORD }}
+          HCODE_MACOS_NOTARY_TEAM_ID: ${{ secrets.HCODE_MACOS_NOTARY_TEAM_ID }}
+
+      - name: Package macOS installers
         run: |
           set -euo pipefail
           mkdir -p .build/artifacts/macos
-
-          npm run gulp "vscode-darwin-${VSCODE_ARCH}-min-ci"
 
           ARCHIVE_PATH="$PWD/.build/artifacts/macos/VSCode-darwin-${VSCODE_ARCH}.zip"
           (cd "../VSCode-darwin-${VSCODE_ARCH}" && zip -Xry "$ARCHIVE_PATH" *)
@@ -201,6 +274,24 @@ jobs:
           ls -lah .build/artifacts/macos
         env:
           GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Notarize and staple macOS DMG
+        if: ${{ steps.macos_signing.outcome == 'success' && secrets.HCODE_MACOS_NOTARY_APPLE_ID != '' && secrets.HCODE_MACOS_NOTARY_APP_PASSWORD != '' && secrets.HCODE_MACOS_NOTARY_TEAM_ID != '' }}
+        run: |
+          set -euo pipefail
+          DMG_PATH="$PWD/.build/artifacts/macos/VSCode-darwin-${VSCODE_ARCH}.dmg"
+
+          xcrun notarytool submit "$DMG_PATH" \
+            --apple-id "$HCODE_MACOS_NOTARY_APPLE_ID" \
+            --password "$HCODE_MACOS_NOTARY_APP_PASSWORD" \
+            --team-id "$HCODE_MACOS_NOTARY_TEAM_ID" \
+            --wait
+
+          xcrun stapler staple "$DMG_PATH"
+        env:
+          HCODE_MACOS_NOTARY_APPLE_ID: ${{ secrets.HCODE_MACOS_NOTARY_APPLE_ID }}
+          HCODE_MACOS_NOTARY_APP_PASSWORD: ${{ secrets.HCODE_MACOS_NOTARY_APP_PASSWORD }}
+          HCODE_MACOS_NOTARY_TEAM_ID: ${{ secrets.HCODE_MACOS_NOTARY_TEAM_ID }}
 
       - name: Upload macOS installers
         uses: actions/upload-artifact@v7
@@ -300,6 +391,46 @@ jobs:
           Get-ChildItem .build\artifacts\windows | Format-Table Name, Length
         env:
           GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Sign Windows installers
+        if: ${{ secrets.HCODE_WINDOWS_CERT_PFX_BASE64 != '' && secrets.HCODE_WINDOWS_CERT_PASSWORD != '' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pfxPath = Join-Path $env:RUNNER_TEMP "hcode-windows-cert.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:HCODE_WINDOWS_CERT_PFX_BASE64))
+
+          $securePassword = ConvertTo-SecureString -String $env:HCODE_WINDOWS_CERT_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $securePassword -Exportable
+          if (-not $cert) {
+            throw "Failed to import PFX certificate."
+          }
+
+          $signtool = Get-ChildItem "C:\\Program Files (x86)\\Windows Kits\\10\\bin\\*\\x64\\signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $signtool) {
+            throw "signtool.exe not found on runner."
+          }
+
+          $targets = Get-ChildItem ".build\\artifacts\\windows" -Filter "*.exe" -File
+          if (@($targets).Count -eq 0) {
+            throw "No Windows installer executables found to sign."
+          }
+
+          foreach ($file in $targets) {
+            & $signtool.FullName sign /fd SHA256 /sha1 $cert.Thumbprint /tr "http://timestamp.digicert.com" /td SHA256 /d "HCode" /du "https://github.com/hnanoto/vscode" $file.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to sign $($file.FullName)"
+            }
+            & $signtool.FullName verify /pa $file.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed signature verification for $($file.FullName)"
+            }
+          }
+
+          Get-ChildItem .build\artifacts\windows | Format-Table Name, Length
+        env:
+          HCODE_WINDOWS_CERT_PFX_BASE64: ${{ secrets.HCODE_WINDOWS_CERT_PFX_BASE64 }}
+          HCODE_WINDOWS_CERT_PASSWORD: ${{ secrets.HCODE_WINDOWS_CERT_PASSWORD }}
 
       - name: Upload Windows installers
         uses: actions/upload-artifact@v7
