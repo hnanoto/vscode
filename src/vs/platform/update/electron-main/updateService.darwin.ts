@@ -142,8 +142,29 @@ export class DarwinUpdateService extends AbstractUpdateService implements IRelau
 			return;
 		}
 
-		this.logService.trace('update#doCheckForUpdates - using Electron autoUpdater', { url, explicit, background });
-		electron.autoUpdater.checkForUpdates();
+		this.logService.trace('update#doCheckForUpdates - pre-checking for updates', { url, explicit, background });
+		
+		// For static JSON hosting (like GitHub pages), an empty {} means no update,
+		// but Mac autoUpdater fails with a parse error trying to read it. Check first:
+		this.requestService.request({ url, headers: getUpdateRequestHeaders(this.productService.version) }, CancellationToken.None).then(async context => {
+			if (context.res.statusCode === 204) {
+				this.onUpdateNotAvailable();
+				return;
+			}
+			if (context.res.statusCode === 200) {
+				const update = await asJson<{ url?: string; version?: string }>(context);
+				if (!update || !update.url || !update.version) {
+					this.onUpdateNotAvailable();
+					return;
+				}
+			}
+			
+			this.logService.trace('update#doCheckForUpdates - using Electron autoUpdater', { url, explicit, background });
+			electron.autoUpdater.checkForUpdates();
+		}).catch(err => {
+			this.logService.error('update#doCheckForUpdates - failed to pre-check for updates', err);
+			this.setState(State.Idle(UpdateType.Archive));
+		});
 	}
 
 	/**

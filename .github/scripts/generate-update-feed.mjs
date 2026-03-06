@@ -139,11 +139,13 @@ async function main() {
 		},
 		'darwin': {
 			version: commit,
+			name: version,
 			productVersion: version,
 			url: assetUrl(darwinX64Zip.name)
 		},
 		'darwin-arm64': {
 			version: commit,
+			name: version,
 			productVersion: version,
 			url: assetUrl(darwinArm64Zip.name)
 		},

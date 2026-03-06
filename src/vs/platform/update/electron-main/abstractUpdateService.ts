@@ -15,7 +15,7 @@ import { IEnvironmentMainService } from '../../environment/electron-main/environ
 import { ILifecycleMainService, LifecycleMainPhase } from '../../lifecycle/electron-main/lifecycleMainService.js';
 import { ILogService } from '../../log/common/log.js';
 import { IProductService } from '../../product/common/productService.js';
-import { IRequestService } from '../../request/common/request.js';
+import { asJson, IRequestService } from '../../request/common/request.js';
 import { AvailableForDownload, DisablementReason, IUpdateService, State, StateType, UpdateType } from '../common/update.js';
 
 export interface IUpdateURLOptions {
@@ -332,7 +332,16 @@ export abstract class AbstractUpdateService implements IUpdateService {
 			this.logService.trace('update#isLatestVersion() - response', { statusCode });
 			// The update server replies with 204 (No Content) when no
 			// update is available - that's all we want to know.
-			return statusCode === 204;
+			if (statusCode === 204) {
+				return true;
+			}
+			if (statusCode === 200) {
+				const update = await asJson<{ url?: string; version?: string }>(context);
+				if (!update || !update.url || !update.version) {
+					return true; // Empty JSON object
+				}
+			}
+			return false;
 
 		} catch (error) {
 			this.logService.error('update#isLatestVersion(): failed to check for updates');
