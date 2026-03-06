@@ -204,9 +204,21 @@ jobs:
 
       - name: Setup macOS signing keychain
         id: macos_signing
-        if: ${{ secrets.HCODE_MACOS_CERT_P12_BASE64 != '' && secrets.HCODE_MACOS_CERT_PASSWORD != '' && secrets.HCODE_MACOS_SIGN_IDENTITY != '' }}
         run: |
           set -euo pipefail
+
+          if [ -z "${HCODE_MACOS_CERT_P12_BASE64:-}" ] || [ -z "${HCODE_MACOS_CERT_PASSWORD:-}" ] || [ -z "${HCODE_MACOS_SIGN_IDENTITY:-}" ]; then
+            echo "macOS signing secrets not configured. Building unsigned macOS artifacts."
+            echo "signing_enabled=false" >> "$GITHUB_OUTPUT"
+            echo "notarization_enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          NOTARIZATION_ENABLED=false
+          if [ -n "${HCODE_MACOS_NOTARY_APPLE_ID:-}" ] && [ -n "${HCODE_MACOS_NOTARY_APP_PASSWORD:-}" ] && [ -n "${HCODE_MACOS_NOTARY_TEAM_ID:-}" ]; then
+            NOTARIZATION_ENABLED=true
+          fi
+
           KEYCHAIN_PATH="$RUNNER_TEMP/buildagent.keychain"
           CERT_PATH="$RUNNER_TEMP/hcode-macos-cert.p12"
 
@@ -220,13 +232,18 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k pwd "$KEYCHAIN_PATH"
 
           echo "codesign_identity=$HCODE_MACOS_SIGN_IDENTITY" >> "$GITHUB_OUTPUT"
+          echo "signing_enabled=true" >> "$GITHUB_OUTPUT"
+          echo "notarization_enabled=$NOTARIZATION_ENABLED" >> "$GITHUB_OUTPUT"
         env:
           HCODE_MACOS_CERT_P12_BASE64: ${{ secrets.HCODE_MACOS_CERT_P12_BASE64 }}
           HCODE_MACOS_CERT_PASSWORD: ${{ secrets.HCODE_MACOS_CERT_PASSWORD }}
           HCODE_MACOS_SIGN_IDENTITY: ${{ secrets.HCODE_MACOS_SIGN_IDENTITY }}
+          HCODE_MACOS_NOTARY_APPLE_ID: ${{ secrets.HCODE_MACOS_NOTARY_APPLE_ID }}
+          HCODE_MACOS_NOTARY_APP_PASSWORD: ${{ secrets.HCODE_MACOS_NOTARY_APP_PASSWORD }}
+          HCODE_MACOS_NOTARY_TEAM_ID: ${{ secrets.HCODE_MACOS_NOTARY_TEAM_ID }}
 
       - name: Sign macOS app
-        if: steps.macos_signing.outcome == 'success'
+        if: steps.macos_signing.outputs.signing_enabled == 'true'
         run: |
           set -euo pipefail
           node build/darwin/sign.ts "$(dirname "$PWD")"
@@ -239,7 +256,7 @@ jobs:
           CODESIGN_IDENTITY: ${{ steps.macos_signing.outputs.codesign_identity }}
 
       - name: Notarize and staple macOS app
-        if: ${{ steps.macos_signing.outcome == 'success' && secrets.HCODE_MACOS_NOTARY_APPLE_ID != '' && secrets.HCODE_MACOS_NOTARY_APP_PASSWORD != '' && secrets.HCODE_MACOS_NOTARY_TEAM_ID != '' }}
+        if: steps.macos_signing.outputs.signing_enabled == 'true' && steps.macos_signing.outputs.notarization_enabled == 'true'
         run: |
           set -euo pipefail
           APP_NAME="$(node -p "require('./product.json').nameLong + '.app'")"
@@ -276,7 +293,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: Notarize and staple macOS DMG
-        if: ${{ steps.macos_signing.outcome == 'success' && secrets.HCODE_MACOS_NOTARY_APPLE_ID != '' && secrets.HCODE_MACOS_NOTARY_APP_PASSWORD != '' && secrets.HCODE_MACOS_NOTARY_TEAM_ID != '' }}
+        if: steps.macos_signing.outputs.signing_enabled == 'true' && steps.macos_signing.outputs.notarization_enabled == 'true'
         run: |
           set -euo pipefail
           DMG_PATH="$PWD/.build/artifacts/macos/VSCode-darwin-${VSCODE_ARCH}.dmg"
@@ -393,10 +410,15 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: Sign Windows installers
-        if: ${{ secrets.HCODE_WINDOWS_CERT_PFX_BASE64 != '' && secrets.HCODE_WINDOWS_CERT_PASSWORD != '' }}
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
+
+          if ([string]::IsNullOrWhiteSpace($env:HCODE_WINDOWS_CERT_PFX_BASE64) -or [string]::IsNullOrWhiteSpace($env:HCODE_WINDOWS_CERT_PASSWORD)) {
+            Write-Host "Windows signing secrets not configured. Keeping unsigned installers."
+            exit 0
+          }
+
           $pfxPath = Join-Path $env:RUNNER_TEMP "hcode-windows-cert.pfx"
           [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:HCODE_WINDOWS_CERT_PFX_BASE64))
 
