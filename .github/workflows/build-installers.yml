@@ -292,7 +292,8 @@ jobs:
           ARCHIVE_PATH="$PWD/.build/artifacts/macos/HCode-darwin-${VSCODE_ARCH}.zip"
           (cd "../VSCode-darwin-${VSCODE_ARCH}" && zip -Xry "$ARCHIVE_PATH" *)
 
-          VSCODE_QUALITY=stable node build/darwin/create-dmg.ts "$(dirname "$PWD")" "$PWD/.build/artifacts/macos"
+          VSCODE_QUALITY="$(node -p "require('./product.json').quality || 'stable'")" \
+            node build/darwin/create-dmg.ts "$(dirname "$PWD")" "$PWD/.build/artifacts/macos"
           if [ -f "$PWD/.build/artifacts/macos/VSCode-darwin-${VSCODE_ARCH}.dmg" ]; then
             mv "$PWD/.build/artifacts/macos/VSCode-darwin-${VSCODE_ARCH}.dmg" "$PWD/.build/artifacts/macos/HCode-darwin-${VSCODE_ARCH}.dmg"
           fi
