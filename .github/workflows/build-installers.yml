@@ -404,6 +404,7 @@ jobs:
         run: |
           . build/azure-pipelines/win32/exec.ps1
           $ErrorActionPreference = "Stop"
+          $env:VSCODE_QUALITY = (node -p "require('./product.json').quality || 'stable'").Trim()
           mkdir .build\artifacts\windows -ea 0
 
           exec { npm run gulp "vscode-win32-$env:VSCODE_ARCH-min-ci" }
