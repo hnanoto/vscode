@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 import { spawnSync } from 'child_process';
+import { existsSync } from 'fs';
 import path from 'path';
 import { getChromiumSysroot, getVSCodeSysroot } from './debian/install-sysroot.ts';
 import { generatePackageDeps as generatePackageDepsDebian } from './debian/calculate-deps.ts';
@@ -55,9 +56,19 @@ export async function getDependencies(packageType: 'deb' | 'rpm', buildDir: stri
 
 	const appPath = path.join(buildDir, applicationName);
 	// Add the native modules
-	const files = findResult.stdout.toString().trimEnd().split('\n');
-	// Add the tunnel binary.
-	files.push(path.join(buildDir, 'bin', product.tunnelApplicationName));
+	const files = findResult.stdout.toString().trimEnd().split('\n').filter(Boolean);
+	// Add the tunnel binary when present. Forks can rename this binary while still
+	// producing a legacy `code-tunnel` in CI builds.
+	const tunnelCandidates = [
+		path.join(buildDir, 'bin', product.tunnelApplicationName),
+		path.join(buildDir, 'bin', 'code-tunnel')
+	];
+	const tunnelBinary = tunnelCandidates.find(candidate => existsSync(candidate));
+	if (tunnelBinary) {
+		files.push(tunnelBinary);
+	} else {
+		console.warn(`Could not find a tunnel binary in ${path.join(buildDir, 'bin')}. Skipping it for dependency calculation.`);
+	}
 	// Add the main executable.
 	files.push(appPath);
 	// Add chrome sandbox and crashpad handler.
