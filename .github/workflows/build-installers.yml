@@ -82,11 +82,14 @@ jobs:
           mkdir -p .build/artifacts/linux
 
           npm run gulp "vscode-linux-${VSCODE_ARCH}-min-ci"
-          tar -czf ".build/artifacts/linux/VSCode-linux-${VSCODE_ARCH}.tar.gz" -C .. "VSCode-linux-${VSCODE_ARCH}"
+          tar -czf ".build/artifacts/linux/HCode-linux-${VSCODE_ARCH}.tar.gz" -C .. "VSCode-linux-${VSCODE_ARCH}"
 
           if npm run gulp "vscode-linux-${VSCODE_ARCH}-prepare-deb" && npm run gulp "vscode-linux-${VSCODE_ARCH}-build-deb"; then
             if ls .build/linux/deb/*/deb/*.deb >/dev/null 2>&1; then
-              cp .build/linux/deb/*/deb/*.deb .build/artifacts/linux/
+              for deb_file in .build/linux/deb/*/deb/*.deb; do
+                deb_name="$(basename "$deb_file")"
+                cp "$deb_file" ".build/artifacts/linux/HCode-${deb_name}"
+              done
             else
               echo "::warning::No .deb files were generated."
             fi
@@ -96,7 +99,10 @@ jobs:
 
           if npm run gulp "vscode-linux-${VSCODE_ARCH}-prepare-rpm" && npm run gulp "vscode-linux-${VSCODE_ARCH}-build-rpm"; then
             if ls .build/linux/rpm/*/*.rpm >/dev/null 2>&1; then
-              cp .build/linux/rpm/*/*.rpm .build/artifacts/linux/
+              for rpm_file in .build/linux/rpm/*/*.rpm; do
+                rpm_name="$(basename "$rpm_file")"
+                cp "$rpm_file" ".build/artifacts/linux/HCode-${rpm_name}"
+              done
             else
               echo "::warning::No .rpm files were generated."
             fi
