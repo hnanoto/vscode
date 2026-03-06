@@ -292,7 +292,7 @@ jobs:
           ARCHIVE_PATH="$PWD/.build/artifacts/macos/HCode-darwin-${VSCODE_ARCH}.zip"
           (cd "../VSCode-darwin-${VSCODE_ARCH}" && zip -Xry "$ARCHIVE_PATH" *)
 
-          VSCODE_QUALITY="$(node -p "require('./product.json').quality || 'stable'")" \
+          VSCODE_QUALITY="$(node -p "(require('./product.json').quality || 'stable').trim()")" \
             node build/darwin/create-dmg.ts "$(dirname "$PWD")" "$PWD/.build/artifacts/macos"
           if [ -f "$PWD/.build/artifacts/macos/VSCode-darwin-${VSCODE_ARCH}.dmg" ]; then
             mv "$PWD/.build/artifacts/macos/VSCode-darwin-${VSCODE_ARCH}.dmg" "$PWD/.build/artifacts/macos/HCode-darwin-${VSCODE_ARCH}.dmg"
@@ -404,7 +404,7 @@ jobs:
         run: |
           . build/azure-pipelines/win32/exec.ps1
           $ErrorActionPreference = "Stop"
-          $env:VSCODE_QUALITY = (node -p "require('./product.json').quality || 'stable'").Trim()
+          $env:VSCODE_QUALITY = (node -p "(require('./product.json').quality || 'stable').trim()")
           mkdir .build\artifacts\windows -ea 0
 
           exec { npm run gulp "vscode-win32-$env:VSCODE_ARCH-min-ci" }
@@ -512,7 +512,7 @@ jobs:
           set -euo pipefail
           TAG="hcode-${GITHUB_SHA::12}"
           VERSION="$(node -p "require('./package.json').version")"
-          QUALITY="$(node -p "require('./product.json').quality || 'stable'")"
+          QUALITY="$(node -p "(require('./product.json').quality || 'stable').trim()")"
           echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "quality=${QUALITY}" >> "${GITHUB_OUTPUT}"
