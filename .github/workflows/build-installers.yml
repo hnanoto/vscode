@@ -289,10 +289,13 @@ jobs:
           set -euo pipefail
           mkdir -p .build/artifacts/macos
 
-          ARCHIVE_PATH="$PWD/.build/artifacts/macos/VSCode-darwin-${VSCODE_ARCH}.zip"
+          ARCHIVE_PATH="$PWD/.build/artifacts/macos/HCode-darwin-${VSCODE_ARCH}.zip"
           (cd "../VSCode-darwin-${VSCODE_ARCH}" && zip -Xry "$ARCHIVE_PATH" *)
 
           VSCODE_QUALITY=stable node build/darwin/create-dmg.ts "$(dirname "$PWD")" "$PWD/.build/artifacts/macos"
+          if [ -f "$PWD/.build/artifacts/macos/VSCode-darwin-${VSCODE_ARCH}.dmg" ]; then
+            mv "$PWD/.build/artifacts/macos/VSCode-darwin-${VSCODE_ARCH}.dmg" "$PWD/.build/artifacts/macos/HCode-darwin-${VSCODE_ARCH}.dmg"
+          fi
 
           ls -lah .build/artifacts/macos
         env:
@@ -302,7 +305,7 @@ jobs:
         if: steps.macos_signing.outputs.signing_enabled == 'true' && steps.macos_signing.outputs.notarization_enabled == 'true'
         run: |
           set -euo pipefail
-          DMG_PATH="$PWD/.build/artifacts/macos/VSCode-darwin-${VSCODE_ARCH}.dmg"
+          DMG_PATH="$PWD/.build/artifacts/macos/HCode-darwin-${VSCODE_ARCH}.dmg"
 
           xcrun notarytool submit "$DMG_PATH" \
             --apple-id "$HCODE_MACOS_NOTARY_APPLE_ID" \
@@ -407,9 +410,9 @@ jobs:
           exec { npm run gulp "vscode-win32-$env:VSCODE_ARCH-system-setup" }
           exec { npm run gulp "vscode-win32-$env:VSCODE_ARCH-user-setup" }
 
-          exec { 7z.exe a -tzip ".build\artifacts\windows\VSCode-win32-$env:VSCODE_ARCH.zip" "..\VSCode-win32-$env:VSCODE_ARCH\*" "-xr!CodeSignSummary*.md" }
-          Copy-Item ".build\win32-$env:VSCODE_ARCH\system-setup\VSCodeSetup.exe" ".build\artifacts\windows\VSCodeSetup-$env:VSCODE_ARCH.exe" -Force
-          Copy-Item ".build\win32-$env:VSCODE_ARCH\user-setup\VSCodeSetup.exe" ".build\artifacts\windows\VSCodeUserSetup-$env:VSCODE_ARCH.exe" -Force
+          exec { 7z.exe a -tzip ".build\artifacts\windows\HCode-win32-$env:VSCODE_ARCH.zip" "..\VSCode-win32-$env:VSCODE_ARCH\*" "-xr!CodeSignSummary*.md" }
+          Copy-Item ".build\win32-$env:VSCODE_ARCH\system-setup\VSCodeSetup.exe" ".build\artifacts\windows\HCodeSetup-$env:VSCODE_ARCH.exe" -Force
+          Copy-Item ".build\win32-$env:VSCODE_ARCH\user-setup\VSCodeSetup.exe" ".build\artifacts\windows\HCodeUserSetup-$env:VSCODE_ARCH.exe" -Force
 
           Get-ChildItem .build\artifacts\windows | Format-Table Name, Length
         env:
