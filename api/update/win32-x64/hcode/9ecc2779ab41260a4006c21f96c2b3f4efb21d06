@@ -1,1 +1,6 @@
-{}
+{
+	"version": "9821ee282c82fce526b35ed6c2f203e135e63632",
+	"productVersion": "1.111.0",
+	"url": "https://github.com/hnanoto/vscode/releases/download/hcode-9821ee282c82/VSCodeSetup-x64.exe",
+	"sha256hash": "df36f7878db6bc829a8b6ef68ff11e7ec5ee41c302f71a2940591734ef5ff029"
+}
