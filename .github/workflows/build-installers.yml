@@ -1,4 +1,4 @@
-name: Code OSS (installers)
+name: HCode (installers)
 
 on:
   workflow_dispatch:
