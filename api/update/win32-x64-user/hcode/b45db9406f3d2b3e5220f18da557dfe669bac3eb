@@ -1,1 +1,6 @@
-{}
+{
+	"version": "ce4459351fdeca6b9793e675909431441d5b372c",
+	"productVersion": "1.112.0",
+	"url": "https://github.com/hnanoto/vscode/releases/download/hcode-ce4459351fde/HCodeUserSetup-x64.exe",
+	"sha256hash": "7d9458e0e7abe9768cbb38f15b660f7e9e902cc6372885a84db5f50bdc29e611"
+}
