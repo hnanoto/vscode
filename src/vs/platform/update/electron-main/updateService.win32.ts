@@ -501,7 +501,9 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 				// ignore
 			}
 		} else {
-			spawn(this.availableUpdate.packagePath, ['/silent', '/log', '/mergetasks=runcode,!desktopicon,!quicklaunchicon'], {
+			// Use very silent mode and force-close switches to avoid getting stuck
+			// on hidden "application is running" prompts during restart-to-update.
+			spawn(this.availableUpdate.packagePath, ['/verysilent', '/suppressmsgboxes', '/closeapplications', '/forcecloseapplications', '/log', '/mergetasks=runcode,!desktopicon,!quicklaunchicon'], {
 				detached: true,
 				stdio: ['ignore', 'ignore', 'ignore'],
 				env: { ...process.env, __COMPAT_LAYER: 'RunAsInvoker' }
