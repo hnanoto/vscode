@@ -1529,7 +1529,10 @@ end;
 
 function GetAppMutex(Value: string): string;
 begin
-  if IsBackgroundUpdate() then
+  // In silent mode (used by in-app restart-to-update), avoid blocking on
+  // the app mutex because this can trigger hidden retry/cancel prompts and
+  // cause update loops.
+  if IsBackgroundUpdate() or WizardSilent() then
     Result := ''
   else
     Result := '{#AppMutex}';
