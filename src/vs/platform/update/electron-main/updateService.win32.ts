@@ -503,11 +503,14 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 		} else {
 			// Use very silent mode and force-close switches to avoid getting stuck
 			// on hidden "application is running" prompts during restart-to-update.
-			spawn(this.availableUpdate.packagePath, ['/verysilent', '/suppressmsgboxes', '/closeapplications', '/forcecloseapplications', '/log', '/mergetasks=runcode,!desktopicon,!quicklaunchicon'], {
+			const child = spawn(this.availableUpdate.packagePath, ['/verysilent', '/suppressmsgboxes', '/closeapplications', '/forcecloseapplications', '/log', '/mergetasks=runcode,!desktopicon,!quicklaunchicon'], {
 				detached: true,
 				stdio: ['ignore', 'ignore', 'ignore'],
-				env: { ...process.env, __COMPAT_LAYER: 'RunAsInvoker' }
+				// For system installs, allow the installer to elevate (UAC) when needed.
+				// For user installs, keep RunAsInvoker to avoid unnecessary elevation flows.
+				env: this.productService.target === 'system' ? { ...process.env } : { ...process.env, __COMPAT_LAYER: 'RunAsInvoker' }
 			});
+			child.once('error', error => this.logService.error('update#doQuitAndInstall(): failed to spawn setup', error));
 		}
 	}
 
