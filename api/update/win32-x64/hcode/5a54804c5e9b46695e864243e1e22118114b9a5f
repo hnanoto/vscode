@@ -1,1 +1,6 @@
-{}
+{
+	"version": "8a948a2b9b04249e79964695c576698602ae5144",
+	"productVersion": "1.112.0",
+	"url": "https://github.com/hnanoto/vscode/releases/download/hcode-8a948a2b9b04/HCodeSetup-x64.exe",
+	"sha256hash": "8ea0d8d4d19095301012f0b2e5ebbf64143db88d2e5fce82c21faef2f656ce52"
+}
