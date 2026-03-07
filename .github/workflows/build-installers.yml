@@ -540,6 +540,18 @@ jobs:
             gh release edit "${TAG}" --latest
           fi
 
+      - name: Verify published release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node .github/scripts/verify-release-assets.mjs \
+            --repo "${GITHUB_REPOSITORY}" \
+            --tag "${{ steps.release_meta.outputs.tag }}" \
+            --artifacts-dir .build/release-artifacts \
+            --retries 18 \
+            --retry-delay-ms 10000
+
       - name: Prepare gh-pages checkout
         env:
           GH_TOKEN: ${{ github.token }}
