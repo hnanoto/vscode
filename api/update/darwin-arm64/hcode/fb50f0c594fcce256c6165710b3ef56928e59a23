@@ -1,1 +1,6 @@
-{}
+{
+	"version": "6b3fc4ed0a8a0e0d4f436b895912b32eedf3e095",
+	"name": "1.112.0",
+	"productVersion": "1.112.0",
+	"url": "https://github.com/hnanoto/vscode/releases/download/hcode-6b3fc4ed0a8a/HCode-darwin-arm64.zip"
+}
