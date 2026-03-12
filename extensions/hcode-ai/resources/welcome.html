@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HCode AI — Bem-vindo</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --border: #30363d;
+    --accent: #238cf5;
+    --accent2: #7c3aed;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --text: #e6edf3;
+    --muted: #8b949e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 32px 24px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .hero {
+    text-align: center;
+    padding: 40px 0 32px;
+  }
+  .logo {
+    font-size: 64px;
+    display: block;
+    margin-bottom: 16px;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+  }
+  h1 { font-size: 32px; font-weight: 700; margin-bottom: 8px; }
+  h1 span { background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .subtitle { color: var(--muted); font-size: 16px; }
+
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin: 32px 0 12px;
+  }
+
+  /* ── Formas de acesso ── */
+  .access-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  .access-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    transition: border-color 0.2s;
+  }
+  .access-card:hover { border-color: var(--accent); }
+  .access-card .icon { font-size: 28px; margin-bottom: 8px; }
+  .access-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .access-card p { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .kbd {
+    display: inline-block;
+    background: #21262d;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: monospace;
+    font-size: 11px;
+    color: var(--text);
+  }
+
+  /* ── Agentes (slash commands) ── */
+  .agents-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .agents-table th {
+    text-align: left;
+    padding: 8px 12px;
+    color: var(--muted);
+    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+  }
+  .agents-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #21262d;
+    vertical-align: top;
+  }
+  .agents-table tr:last-child td { border-bottom: none; }
+  .cmd { color: var(--accent); font-family: monospace; font-weight: 600; }
+  .badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge-free { background: #1a4a2e; color: var(--green); }
+  .badge-agent { background: #2d1f5e; color: #a78bfa; }
+  .badge-paid { background: #3b2000; color: var(--yellow); }
+
+  /* ── Providers ── */
+  .providers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+  }
+  .provider-chip {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+  }
+  .provider-chip .em { font-size: 18px; }
+  .provider-chip strong { display: block; font-weight: 600; }
+  .provider-chip span { font-size: 11px; color: var(--muted); }
+
+  /* ── CTA ── */
+  .cta {
+    margin-top: 36px;
+    padding: 20px 24px;
+    background: linear-gradient(135deg, #0c2340, #1a0a3d);
+    border: 1px solid #1d4ed8;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .cta-icon { font-size: 36px; }
+  .cta h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .cta p { font-size: 13px; color: var(--muted); }
+  .cta-btn {
+    margin-left: auto;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .cta-btn:hover { background: #1a7fe0; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <span class="logo">🤖</span>
+  <h1>HCode <span>AI</span></h1>
+  <p class="subtitle">O assistente de IA mais completo de um IDE open source</p>
+</div>
+
+<!-- COMO ACESSAR -->
+<div class="section-title">💬 Como usar os agentes</div>
+<div class="access-grid">
+  <div class="access-card">
+    <div class="icon">💬</div>
+    <h3>Painel de Chat</h3>
+    <p>Clique no ícone de chat na barra lateral ou pressione <span class="kbd">Ctrl+Alt+I</span> para abrir o chat e digitar suas perguntas.</p>
+  </div>
+  <div class="access-card">
+    <div class="icon">⌨️</div>
+    <h3>Comandos de Chat</h3>
+    <p>No chat, use slash commands como <span class="kbd">/agent</span>, <span class="kbd">/fix</span>, <span class="kbd">/commit</span> para ativar agentes específicos.</p>
+  </div>
+  <div class="access-card">
+    <div class="icon">🖱️</div>
+    <h3>Menu de Contexto</h3>
+    <p>Selecione código, clique com <strong>botão direito</strong> → <em>HCode AI</em> → Explicar, Corrigir, Gerar Testes ou Refatorar.</p>
+  </div>
+  <div class="access-card">
+    <div class="icon">📊</div>
+    <h3>Status Bar</h3>
+    <p>Clique em <span class="kbd">🤖 Ollama · qwen2.5</span> na barra de status para trocar de provider ou modelo instantaneamente.</p>
+  </div>
+  <div class="access-card">
+    <div class="icon">⚡</div>
+    <h3>Paleta de Comandos</h3>
+    <p>Pressione <span class="kbd">Ctrl+Shift+P</span> e pesquise <em>"HCode AI"</em> para ver todos os comandos disponíveis.</p>
+  </div>
+  <div class="access-card">
+    <div class="icon">🧬</div>
+    <h3>SCM / Git</h3>
+    <p>Na aba de controle de versão, clique em <span class="kbd">⚡</span> ao lado da mensagem de commit para gerar a mensagem automaticamente.</p>
+  </div>
+</div>
+
+<!-- AGENTES / SLASH COMMANDS -->
+<div class="section-title">🤖 Todos os Agentes Disponíveis</div>
+<table class="agents-table">
+  <thead>
+    <tr>
+      <th>Comando</th>
+      <th>O que faz</th>
+      <th>Tipo</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="cmd">@hcode [pergunta]</span></td>
+      <td>Agente principal — responde perguntas, explica código, lê arquivos, busca no projeto</td>
+      <td><span class="badge badge-free">Padrão</span></td>
+    </tr>
+    <tr>
+      <td><span class="cmd">/agent [tarefa]</span></td>
+      <td><strong>Modo Agente Completo</strong> — executa tarefas de engenharia autônomas: lê arquivos, edita código, roda testes, verifica erros</td>
+      <td><span class="badge badge-agent">Autônomo</span></td>
+    </tr>
+    <tr>
+      <td><span class="cmd">/fix</span></td>
+      <td>Analisa o código selecionado ou o arquivo atual e corrige bugs, erros de tipo e problemas de lógica</td>
+      <td><span class="badge badge-free">Padrão</span></td>
+    </tr>
+    <tr>
+      <td><span class="cmd">/commit</span></td>
+      <td>Gera uma mensagem de commit semântica, no padrão Conventional Commits, para o diff atual</td>
+      <td><span class="badge badge-free">Git</span></td>
+    </tr>
+    <tr>
+      <td><span class="cmd">/test</span></td>
+      <td>Gera testes unitários para o código selecionado ou função ativa</td>
+      <td><span class="badge badge-free">Padrão</span></td>
+    </tr>
+    <tr>
+      <td><span class="cmd">/explain</span></td>
+      <td>Explica em detalhes o código selecionado, incluindo lógica, padrões e possíveis melhorias</td>
+      <td><span class="badge badge-free">Padrão</span></td>
+    </tr>
+    <tr>
+      <td><span class="cmd">/setup</span></td>
+      <td>Abre o wizard de configuração para escolher o provider e modelo de IA</td>
+      <td><span class="badge badge-free">Config</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- FERRAMENTAS DO AGENTE -->
+<div class="section-title">🔧 Ferramentas que os Agentes Usam Automaticamente</div>
+<table class="agents-table">
+  <thead>
+    <tr><th>Ferramenta</th><th>O que faz</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><span class="cmd">hcode_readFile</span></td><td>Lê qualquer arquivo do workspace (com segurança anti-traversal)</td></tr>
+    <tr><td><span class="cmd">hcode_listDirectory</span></td><td>Lista estrutura de pastas e arquivos do projeto</td></tr>
+    <tr><td><span class="cmd">hcode_runTerminal</span></td><td>Executa comandos shell — npm, git, testes, build</td></tr>
+    <tr><td><span class="cmd">hcode_searchCode</span></td><td>Busca padrões no código com ripgrep embutido</td></tr>
+    <tr><td><span class="cmd">hcode_gitStatus</span></td><td>Retorna branch, status e histórico de commits</td></tr>
+    <tr><td><span class="cmd">hcode_getDiagnostics</span></td><td>Lista erros e warnings do TypeScript/LSP</td></tr>
+    <tr><td><span class="cmd">hcode_webSearch</span></td><td>Busca na internet via DuckDuckGo — sem API key necessária</td></tr>
+    <tr><td><span class="cmd">hcode_inlineEdit</span></td><td>Edita código diretamente no arquivo — sem copiar e colar</td></tr>
+    <tr><td><span class="cmd">hcode_createFile</span></td><td>Cria novos arquivos com conteúdo gerado pelo AI</td></tr>
+  </tbody>
+</table>
+
+<!-- PROVIDERS -->
+<div class="section-title">🌐 Providers de IA disponíveis</div>
+<div class="providers-grid">
+  <div class="provider-chip"><span class="em">🦙</span><div><strong>Ollama</strong><span>🆓 Local & privado</span></div></div>
+  <div class="provider-chip"><span class="em">✨</span><div><strong>Google Gemini</strong><span>🆓 Search + Thinking</span></div></div>
+  <div class="provider-chip"><span class="em">⚡</span><div><strong>Groq</strong><span>🆓 Ultra rápido</span></div></div>
+  <div class="provider-chip"><span class="em">🐋</span><div><strong>DeepSeek</strong><span>🆓 R1 + V3</span></div></div>
+  <div class="provider-chip"><span class="em">🐙</span><div><strong>GitHub Models</strong><span>🆓 Com sua conta</span></div></div>
+  <div class="provider-chip"><span class="em">🌐</span><div><strong>OpenRouter</strong><span>🆓/💳 200+ modelos</span></div></div>
+  <div class="provider-chip"><span class="em">🤖</span><div><strong>Grok (xAI)</strong><span>💳 grok-3</span></div></div>
+  <div class="provider-chip"><span class="em">🧠</span><div><strong>OpenAI</strong><span>💳 GPT-4o, Codex</span></div></div>
+  <div class="provider-chip"><span class="em">🎭</span><div><strong>Anthropic</strong><span>💳 Claude 3.7</span></div></div>
+</div>
+
+<!-- CTA -->
+<div class="cta">
+  <div class="cta-icon">🚀</div>
+  <div>
+    <h3>Comece agora!</h3>
+    <p>Configure seu provider preferido e o HCode AI estará pronto para usar.</p>
+  </div>
+  <button class="cta-btn" onclick="acquireVsCodeApi?.()?.postMessage?.({command:'setup'})">
+    Configurar Provider
+  </button>
+</div>
+
+</body>
+</html>
