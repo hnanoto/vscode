@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import type { IHCodeProvider, IMessage } from '../providers/baseProvider';
 import type { WorkspaceMemory } from '../memory/workspaceMemory';
 import type { HCodeAIStatusBar } from '../ui/statusBar';
+import { runAgentMode } from './agentMode';
 
 const HCODE_PARTICIPANT_ID = 'hcode.ai';
 
@@ -73,6 +74,10 @@ export class HCodeAgent {
 			}
 			if (request.command === 'commit') {
 				await this.handleCommitCommand(provider, model, stream, token);
+				return;
+			}
+			if (request.command === 'agent') {
+				await runAgentMode(request.prompt, provider, model, stream, token);
 				return;
 			}
 

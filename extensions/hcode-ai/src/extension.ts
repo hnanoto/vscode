@@ -7,6 +7,10 @@ import { OllamaProvider } from './providers/ollamaProvider';
 import { GeminiProvider } from './providers/geminiProvider';
 import { OpenAIProvider } from './providers/openaiProvider';
 import { AnthropicProvider } from './providers/anthropicProvider';
+import { GroqProvider } from './providers/groqProvider';
+import { DeepSeekProvider } from './providers/deepseekProvider';
+import { GitHubModelsProvider } from './providers/githubModelsProvider';
+import { OpenRouterProvider } from './providers/openrouterProvider';
 import type { IHCodeProvider } from './providers/baseProvider';
 import { WorkspaceMemory } from './memory/workspaceMemory';
 import { HCodeAIStatusBar } from './ui/statusBar';
@@ -19,6 +23,7 @@ import {
 	GitStatusTool,
 	DiagnosticsTool,
 } from './tools/agenticTools';
+import { WebSearchTool, InlineEditTool, CreateFileTool } from './tools/advancedTools';
 
 let provider: IHCodeProvider | undefined;
 let currentModel = '';
@@ -42,6 +47,18 @@ function buildProvider(): IHCodeProvider {
 		case 'anthropic':
 			currentModel = cfg<string>('anthropic.model');
 			return new AnthropicProvider(cfg<string>('anthropic.apiKey'));
+		case 'groq':
+			currentModel = cfg<string>('groq.model');
+			return new GroqProvider(cfg<string>('groq.apiKey'));
+		case 'deepseek':
+			currentModel = cfg<string>('deepseek.model');
+			return new DeepSeekProvider(cfg<string>('deepseek.apiKey'));
+		case 'github':
+			currentModel = cfg<string>('github.model');
+			return new GitHubModelsProvider(cfg<string>('github.token'));
+		case 'openrouter':
+			currentModel = cfg<string>('openrouter.model');
+			return new OpenRouterProvider(cfg<string>('openrouter.apiKey'));
 		case 'ollama':
 		default:
 			currentModel = cfg<string>('ollama.model');
@@ -52,12 +69,17 @@ function buildProvider(): IHCodeProvider {
 /** Registers all agentic tools. */
 function registerTools(ctx: vscode.ExtensionContext): void {
 	ctx.subscriptions.push(
+		// Core tools
 		vscode.lm.registerTool('hcode_readFile', new ReadFileTool()),
 		vscode.lm.registerTool('hcode_listDirectory', new ListDirectoryTool()),
 		vscode.lm.registerTool('hcode_runTerminal', new RunTerminalTool()),
 		vscode.lm.registerTool('hcode_searchCode', new SearchCodeTool()),
 		vscode.lm.registerTool('hcode_gitStatus', new GitStatusTool()),
 		vscode.lm.registerTool('hcode_getDiagnostics', new DiagnosticsTool()),
+		// Advanced tools
+		vscode.lm.registerTool('hcode_webSearch', new WebSearchTool()),
+		vscode.lm.registerTool('hcode_inlineEdit', new InlineEditTool()),
+		vscode.lm.registerTool('hcode_createFile', new CreateFileTool()),
 	);
 }
 
