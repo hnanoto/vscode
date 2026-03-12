@@ -382,6 +382,9 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
 
 	ctx.subscriptions.push(
 		vscode.commands.registerCommand('hcode.ai.setup', runSetupWizard),
+		vscode.commands.registerCommand('hcode.ai.focusChat', async () => {
+			await vscode.commands.executeCommand('workbench.action.chat.open');
+		}),
 
 		vscode.commands.registerCommand('hcode.ai.switchProvider', runSetupWizard),
 

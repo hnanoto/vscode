@@ -362,6 +362,10 @@
 				"title": "HCode AI: Configure Provider"
 			},
 			{
+				"command": "hcode.ai.focusChat",
+				"title": "HCode AI: Focus on Chat"
+			},
+			{
 				"command": "hcode.ai.switchProvider",
 				"title": "HCode AI: Switch AI Provider"
 			},
@@ -426,6 +430,11 @@
 				"key": "ctrl+shift+e",
 				"mac": "cmd+shift+e",
 				"when": "editorHasSelection"
+			},
+			{
+				"command": "hcode.ai.focusChat",
+				"key": "ctrl+alt+i",
+				"mac": "cmd+ctrl+i"
 			}
 		],
 		"walkthroughs": [
