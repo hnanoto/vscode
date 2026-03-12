@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 import * as vscode from 'vscode';
-import * as path from 'node:path';
-import * as fs from 'node:fs/promises';
 
 const MEMORY_DIR = '.hcode/ai-memory';
 const ARCHITECTURE_FILE = 'architecture.md';
@@ -17,10 +15,10 @@ const DECISIONS_FILE = 'decisions.md';
  * in .hcode/ai-memory/ so the AI always knows your project's context.
  */
 export class WorkspaceMemory {
-	private readonly memoryPath: string;
+	private readonly memoryUri: vscode.Uri;
 
-	constructor(private readonly workspaceRoot: string) {
-		this.memoryPath = path.join(workspaceRoot, MEMORY_DIR);
+	constructor(workspaceUri: vscode.Uri) {
+		this.memoryUri = vscode.Uri.joinPath(workspaceUri, MEMORY_DIR);
 	}
 
 	/** Returns all memory files concatenated as a system context string. */
@@ -35,15 +33,15 @@ export class WorkspaceMemory {
 			}
 		}
 
-		// Also load custom .hcode/ai-memory/*.md files
+		// Also load any extra .hcode/ai-memory/*.md files
 		try {
-			const entries = await fs.readdir(this.memoryPath, { withFileTypes: true });
-			for (const entry of entries) {
-				if (!entry.isFile() || !entry.name.endsWith('.md')) { continue; }
-				if (memoryFiles.includes(entry.name)) { continue; }
-				const content = await this.readMemoryFile(entry.name);
+			const entries = await vscode.workspace.fs.readDirectory(this.memoryUri);
+			for (const [name] of entries) {
+				if (!name.endsWith('.md')) { continue; }
+				if (memoryFiles.includes(name)) { continue; }
+				const content = await this.readMemoryFile(name);
 				if (content) {
-					parts.push(`## ${entry.name.replace('.md', '')}\n${content}\n`);
+					parts.push(`## ${name.replace('.md', '')}\n${content}\n`);
 				}
 			}
 		} catch {
@@ -63,7 +61,11 @@ export class WorkspaceMemory {
 
 	/** Initializes default memory files for a new workspace. */
 	async initializeDefaults(productName?: string): Promise<void> {
-		await fs.mkdir(this.memoryPath, { recursive: true });
+		try {
+			await vscode.workspace.fs.createDirectory(this.memoryUri);
+		} catch {
+			// Already exists
+		}
 
 		const hasArch = await this.readMemoryFile(ARCHITECTURE_FILE);
 		if (!hasArch) {
@@ -104,7 +106,7 @@ export class WorkspaceMemory {
 		const files = [ARCHITECTURE_FILE, CONVENTIONS_FILE, DECISIONS_FILE];
 		for (const file of files) {
 			try {
-				await fs.unlink(path.join(this.memoryPath, file));
+				await vscode.workspace.fs.delete(vscode.Uri.joinPath(this.memoryUri, file));
 			} catch {
 				// File might not exist
 			}
@@ -112,28 +114,35 @@ export class WorkspaceMemory {
 	}
 
 	async openMemoryFile(file: string = ARCHITECTURE_FILE): Promise<void> {
-		const filePath = path.join(this.memoryPath, file);
-		await fs.mkdir(this.memoryPath, { recursive: true });
-		// Create the file if it doesn't exist
+		const fileUri = vscode.Uri.joinPath(this.memoryUri, file);
 		try {
-			await fs.access(filePath);
+			await vscode.workspace.fs.createDirectory(this.memoryUri);
+		} catch { /* exists */ }
+		// Create if doesn't exist
+		try {
+			await vscode.workspace.fs.stat(fileUri);
 		} catch {
-			await fs.writeFile(filePath, `# ${file.replace('.md', '')}\n\n`, 'utf-8');
+			await vscode.workspace.fs.writeFile(fileUri, new TextEncoder().encode(`# ${file.replace('.md', '')}\n\n`));
 		}
-		const uri = vscode.Uri.file(filePath);
-		await vscode.window.showTextDocument(uri);
+		await vscode.window.showTextDocument(fileUri);
 	}
 
 	private async readMemoryFile(file: string): Promise<string | undefined> {
 		try {
-			return await fs.readFile(path.join(this.memoryPath, file), 'utf-8');
+			const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(this.memoryUri, file));
+			return new TextDecoder().decode(bytes);
 		} catch {
 			return undefined;
 		}
 	}
 
 	private async writeMemoryFile(file: string, content: string): Promise<void> {
-		await fs.mkdir(this.memoryPath, { recursive: true });
-		await fs.writeFile(path.join(this.memoryPath, file), content, 'utf-8');
+		try {
+			await vscode.workspace.fs.createDirectory(this.memoryUri);
+		} catch { /* exists */ }
+		await vscode.workspace.fs.writeFile(
+			vscode.Uri.joinPath(this.memoryUri, file),
+			new TextEncoder().encode(content)
+		);
 	}
 }

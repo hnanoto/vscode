@@ -3,87 +3,156 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 import * as vscode from 'vscode';
-import * as path from 'node:path';
-import * as fs from 'node:fs/promises';
 
-interface ReadFileInput { filePath: string; startLine?: number; endLine?: number }
-interface ListDirInput { dirPath: string; maxDepth?: number }
-interface SearchInput { pattern: string; filePattern?: string; isRegex?: boolean }
-interface DiagnosticsInput { filePath?: string; severity?: 'error' | 'warning' | 'all' }
-
+/** Returns workspace root path or undefined. */
 function workspaceRoot(): string | undefined {
 	return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 }
 
+/** Runs a shell command and returns stdout+stderr. Uses the VS Code shell task API to avoid needing child_process types. */
+function runShell(command: string, cwd: string, token: vscode.CancellationToken): Promise<string> {
+	return new Promise(resolve => {
+		// Use ShellExecution via vscode task system
+		const task = new vscode.Task(
+			{ type: 'hcode-ai-shell' },
+			vscode.TaskScope.Workspace,
+			'hcode-ai-shell',
+			'HCode AI',
+			new vscode.ShellExecution(command, { cwd }),
+		);
+		task.presentationOptions = { reveal: vscode.TaskRevealKind.Never, panel: vscode.TaskPanelKind.Dedicated };
+
+		// Fallback: use exec via shell
+		// We use a simpler approach to avoid child_process types: ShellExecution captures output via a temp file
+		const tmpOut = vscode.Uri.joinPath(vscode.Uri.file(cwd), `.hcode-ai-tmp-${Date.now()}.txt`).fsPath;
+	const wrappedCmd = vscode.env.appHost === 'desktop'
+		? `${command} > "${tmpOut}" 2>&1`
+		: `${command} > "${tmpOut}" 2>&1`;
+
+		const wrappedTask = new vscode.Task(
+			{ type: 'hcode-ai-shell' },
+			vscode.TaskScope.Workspace,
+			'hcode-ai',
+			'HCode AI',
+			new vscode.ShellExecution(wrappedCmd, { cwd }),
+		);
+		wrappedTask.presentationOptions = { reveal: vscode.TaskRevealKind.Never, panel: vscode.TaskPanelKind.Dedicated };
+
+		const cancelDispose = token.onCancellationRequested(() => {
+			resolve('(cancelled)');
+		});
+
+		vscode.tasks.executeTask(wrappedTask).then(exec => {
+			const done = vscode.tasks.onDidEndTask(e => {
+				if (e.execution === exec) {
+					done.dispose();
+					cancelDispose.dispose();
+					// Read temp file
+					vscode.workspace.fs.readFile(vscode.Uri.file(tmpOut)).then(
+						bytes => {
+							const text = new TextDecoder().decode(bytes);
+							// Clean up temp file (fire and forget)
+							vscode.workspace.fs.delete(vscode.Uri.file(tmpOut)).then(undefined, undefined);
+							resolve(text.trim());
+						},
+						() => resolve('(no output)')
+					);
+				}
+			});
+		}, () => {
+			cancelDispose.dispose();
+			resolve('(task failed to start)');
+		});
+	});
+}
+
 // ─── Read File Tool ────────────────────────────────────────────────────────────
 
-export class ReadFileTool implements vscode.LanguageModelTool<ReadFileInput> {
-	async invoke(options: vscode.LanguageModelToolInvocationOptions<ReadFileInput>, _token: vscode.CancellationToken): Promise<vscode.LanguageModelToolResult> {
+export class ReadFileTool implements vscode.LanguageModelTool<{ filePath: string; startLine?: number; endLine?: number }> {
+	async invoke(
+		options: vscode.LanguageModelToolInvocationOptions<{ filePath: string; startLine?: number; endLine?: number }>,
+		_token: vscode.CancellationToken
+	): Promise<vscode.LanguageModelToolResult> {
 		const root = workspaceRoot();
-		if (!root) { return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart('No workspace open.')]); }
+		if (!root) {
+			return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart('No workspace open.')]);
+		}
 
-		const absPath = path.resolve(root, options.input.filePath);
+		const uri = vscode.Uri.joinPath(vscode.Uri.file(root), options.input.filePath);
 		// Security: prevent path traversal outside workspace
-		if (!absPath.startsWith(root)) {
+		if (!uri.fsPath.startsWith(root)) {
 			return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart('Access denied: path is outside workspace.')]);
 		}
 
 		try {
-			const content = await fs.readFile(absPath, 'utf-8');
+			const bytes = await vscode.workspace.fs.readFile(uri);
+			const content = new TextDecoder().decode(bytes);
 			const lines = content.split('\n');
 			const start = Math.max(0, (options.input.startLine ?? 1) - 1);
 			const end = options.input.endLine ? options.input.endLine : lines.length;
 			const slice = lines.slice(start, end).join('\n');
-			const lang = path.extname(absPath).slice(1) || 'text';
+			const ext = options.input.filePath.split('.').pop() ?? 'text';
 			return new vscode.LanguageModelToolResult([
-				new vscode.LanguageModelTextPart(`File: ${options.input.filePath} (lines ${start + 1}-${end})\n\`\`\`${lang}\n${slice}\n\`\`\``)
+				new vscode.LanguageModelTextPart(
+					`File: ${options.input.filePath} (lines ${start + 1}-${end})\n\`\`\`${ext}\n${slice}\n\`\`\``
+				)
 			]);
 		} catch (err) {
-			return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(`Error reading file: ${(err as Error).message}`)]);
+			return new vscode.LanguageModelToolResult([
+				new vscode.LanguageModelTextPart(`Error reading file: ${(err as Error).message}`)
+			]);
 		}
 	}
 }
 
 // ─── List Directory Tool ───────────────────────────────────────────────────────
 
-export class ListDirectoryTool implements vscode.LanguageModelTool<ListDirInput> {
-	async invoke(options: vscode.LanguageModelToolInvocationOptions<ListDirInput>, _token: vscode.CancellationToken): Promise<vscode.LanguageModelToolResult> {
+export class ListDirectoryTool implements vscode.LanguageModelTool<{ dirPath: string; maxDepth?: number }> {
+	async invoke(
+		options: vscode.LanguageModelToolInvocationOptions<{ dirPath: string; maxDepth?: number }>,
+		_token: vscode.CancellationToken
+	): Promise<vscode.LanguageModelToolResult> {
 		const root = workspaceRoot();
-		if (!root) { return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart('No workspace open.')]); }
+		if (!root) {
+			return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart('No workspace open.')]);
+		}
 
-		const absPath = path.resolve(root, options.input.dirPath);
-		if (!absPath.startsWith(root)) {
+		const dirUri = vscode.Uri.joinPath(vscode.Uri.file(root), options.input.dirPath);
+		if (!dirUri.fsPath.startsWith(root)) {
 			return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart('Access denied: path is outside workspace.')]);
 		}
 
 		const maxDepth = options.input.maxDepth ?? 1;
 		const lines: string[] = [];
 
-		async function walk(dir: string, depth: number, prefix: string): Promise<void> {
+		const walk = async (uri: vscode.Uri, depth: number, prefix: string): Promise<void> => {
 			if (depth > maxDepth) { return; }
 			try {
-				const entries = await fs.readdir(dir, { withFileTypes: true });
+				const entries = await vscode.workspace.fs.readDirectory(uri);
 				// Sort: directories first, then files
-				entries.sort((a, b) => {
-					if (a.isDirectory() && !b.isDirectory()) { return -1; }
-					if (!a.isDirectory() && b.isDirectory()) { return 1; }
-					return a.name.localeCompare(b.name);
+				entries.sort(([aName, aType], [bName, bType]) => {
+					const aIsDir = (aType & vscode.FileType.Directory) !== 0;
+					const bIsDir = (bType & vscode.FileType.Directory) !== 0;
+					if (aIsDir && !bIsDir) { return -1; }
+					if (!aIsDir && bIsDir) { return 1; }
+					return aName.localeCompare(bName);
 				});
-				for (const entry of entries) {
-					if (entry.name.startsWith('.') && entry.name !== '.hcode') { continue; }
-					if (entry.name === 'node_modules' || entry.name === 'out' || entry.name === 'dist') { continue; }
-					const icon = entry.isDirectory() ? '📁' : '📄';
-					lines.push(`${prefix}${icon} ${entry.name}`);
-					if (entry.isDirectory()) {
-						await walk(path.join(dir, entry.name), depth + 1, prefix + '  ');
+				for (const [name, type] of entries) {
+					if (name.startsWith('.') && name !== '.hcode') { continue; }
+					if (name === 'node_modules' || name === 'out' || name === 'dist') { continue; }
+					const isDir = (type & vscode.FileType.Directory) !== 0;
+					const icon = isDir ? '📁' : '📄';
+					lines.push(`${prefix}${icon} ${name}`);
+					if (isDir) {
+						await walk(vscode.Uri.joinPath(uri, name), depth + 1, prefix + '  ');
 					}
 				}
 			} catch {
 				lines.push(`${prefix}[unreadable]`);
 			}
-		}
+		};
 
-		await walk(absPath, 1, '');
+		await walk(dirUri, 1, '');
 		return new vscode.LanguageModelToolResult([
 			new vscode.LanguageModelTextPart(`Directory: ${options.input.dirPath}\n${lines.join('\n')}`)
 		]);
@@ -97,85 +166,50 @@ export class RunTerminalTool implements vscode.LanguageModelTool<{ command: stri
 		options: vscode.LanguageModelToolInvocationOptions<{ command: string; cwd?: string }>,
 		token: vscode.CancellationToken
 	): Promise<vscode.LanguageModelToolResult> {
-		const root = workspaceRoot();
+		const root = workspaceRoot() ?? '.';
 		const cwd = options.input.cwd
-			? path.resolve(root ?? '', options.input.cwd)
-			: (root ?? process.cwd());
+			? vscode.Uri.joinPath(vscode.Uri.file(root), options.input.cwd).fsPath
+			: root;
 
-		return new Promise<vscode.LanguageModelToolResult>(resolve => {
-			let output = '';
-			let errorOutput = '';
-
-			const cp = require('node:child_process') as typeof import('node:child_process');
-			const proc = cp.spawn(options.input.command, {
-				shell: true,
-				cwd,
-				timeout: 60_000,
-			});
-
-			proc.stdout?.on('data', (d: Buffer) => { output += d.toString(); });
-			proc.stderr?.on('data', (d: Buffer) => { errorOutput += d.toString(); });
-
-			const cancelDispose = token.onCancellationRequested(() => {
-				proc.kill();
-				resolve(new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart('Command was cancelled.')]));
-			});
-
-			proc.on('close', code => {
-				cancelDispose.dispose();
-				const combined = [
-					output && `stdout:\n${output.trim()}`,
-					errorOutput && `stderr:\n${errorOutput.trim()}`,
-					`exit code: ${code ?? 'unknown'}`,
-				].filter(Boolean).join('\n\n');
-				resolve(new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(combined)]));
-			});
-
-			proc.on('error', err => {
-				cancelDispose.dispose();
-				resolve(new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(`Error: ${err.message}`)]));
-			});
-		});
+		const output = await runShell(options.input.command, cwd, token);
+		return new vscode.LanguageModelToolResult([
+			new vscode.LanguageModelTextPart(`$ ${options.input.command}\n${output}`)
+		]);
 	}
 }
 
 // ─── Search Code Tool ──────────────────────────────────────────────────────────
 
-export class SearchCodeTool implements vscode.LanguageModelTool<SearchInput> {
-	async invoke(options: vscode.LanguageModelToolInvocationOptions<SearchInput>, token: vscode.CancellationToken): Promise<vscode.LanguageModelToolResult> {
-		const { pattern, filePattern, isRegex } = options.input;
-		const include = filePattern ?? '**/*';
-		const exclude = '**/node_modules/**,**/out/**,**/dist/**,.build/**';
-
-		const flags = isRegex ? undefined : undefined; // ripgrep handles it
-		const results = await vscode.workspace.findTextInFiles(
-			{ pattern, isRegex: isRegex ?? false, isCaseSensitive: true },
-			{ include, exclude },
-			(result) => { results.push(result); },
-			token
-		);
-
-		// findTextInFiles returns void, results captured via callback
-		const matches: string[] = [];
-		await vscode.workspace.findTextInFiles(
-			{ pattern, isRegex: isRegex ?? false },
-			{ include, exclude, maxResults: 50 },
-			result => {
-				if ('ranges' in result) {
-					for (const range of result.ranges) {
-						const rel = vscode.workspace.asRelativePath(result.uri);
-						matches.push(`${rel}:${range.start.line + 1}: ${result.preview.text.trim()}`);
-					}
-				}
-			},
-			token
-		);
-
-		if (matches.length === 0) {
-			return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(`No matches found for: ${pattern}`)]);
+export class SearchCodeTool implements vscode.LanguageModelTool<{ pattern: string; filePattern?: string; isRegex?: boolean }> {
+	async invoke(
+		options: vscode.LanguageModelToolInvocationOptions<{ pattern: string; filePattern?: string; isRegex?: boolean }>,
+		token: vscode.CancellationToken
+	): Promise<vscode.LanguageModelToolResult> {
+		const root = workspaceRoot();
+		if (!root) {
+			return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart('No workspace open.')]);
 		}
+
+		const { pattern, filePattern, isRegex } = options.input;
+		// Use ripgrep (rg) which ships with VS Code
+		const rgFlags = isRegex ? '' : '--fixed-strings';
+		const include = filePattern ? `--glob "${filePattern}"` : '';
+		const exclude = '--glob "!node_modules" --glob "!out" --glob "!dist" --glob "!.build"';
+		const rgPath = vscode.env.appRoot
+			? `"${vscode.Uri.joinPath(vscode.Uri.file(vscode.env.appRoot), 'node_modules/@vscode/ripgrep/bin/rg').fsPath}"`
+			: 'rg';
+
+		const cmd = `${rgPath} ${rgFlags} ${include} ${exclude} --line-number --max-count 50 "${pattern.replace(/"/g, '\\"')}" .`;
+		const output = await runShell(cmd, root, token);
+
+		if (!output || output.includes('(no output)') || output.includes('(cancelled)')) {
+			return new vscode.LanguageModelToolResult([
+				new vscode.LanguageModelTextPart(`No matches found for: ${pattern}`)
+			]);
+		}
+
 		return new vscode.LanguageModelToolResult([
-			new vscode.LanguageModelTextPart(`Found ${matches.length} matches for "${pattern}":\n${matches.join('\n')}`)
+			new vscode.LanguageModelTextPart(`Search results for "${pattern}":\n${output}`)
 		]);
 	}
 }
@@ -183,27 +217,23 @@ export class SearchCodeTool implements vscode.LanguageModelTool<SearchInput> {
 // ─── Git Status Tool ───────────────────────────────────────────────────────────
 
 export class GitStatusTool implements vscode.LanguageModelTool<Record<string, never>> {
-	async invoke(_options: vscode.LanguageModelToolInvocationOptions<Record<string, never>>, token: vscode.CancellationToken): Promise<vscode.LanguageModelToolResult> {
+	async invoke(
+		_options: vscode.LanguageModelToolInvocationOptions<Record<string, never>>,
+		token: vscode.CancellationToken
+	): Promise<vscode.LanguageModelToolResult> {
 		const root = workspaceRoot();
-		if (!root) { return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart('No workspace open.')]); }
-
-		const runGit = (args: string): Promise<string> => {
-			return new Promise((resolve) => {
-				const cp = require('node:child_process') as typeof import('node:child_process');
-				cp.exec(`git ${args}`, { cwd: root, timeout: 10_000 }, (_err, stdout, stderr) => {
-					resolve(stdout.trim() || stderr.trim());
-				});
-			});
-		};
+		if (!root) {
+			return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart('No workspace open.')]);
+		}
 
 		const [status, log, branch] = await Promise.all([
-			runGit('status --short'),
-			runGit('log --oneline -5'),
-			runGit('branch --show-current'),
+			runShell('git status --short', root, token),
+			runShell('git log --oneline -5', root, token),
+			runShell('git branch --show-current', root, token),
 		]);
 
 		const output = [
-			`Branch: ${branch}`,
+			`Branch: ${branch || '(unknown)'}`,
 			'',
 			'Status:',
 			status || '(clean)',
@@ -218,17 +248,20 @@ export class GitStatusTool implements vscode.LanguageModelTool<Record<string, ne
 
 // ─── Diagnostics Tool ─────────────────────────────────────────────────────────
 
-export class DiagnosticsTool implements vscode.LanguageModelTool<DiagnosticsInput> {
-	async invoke(options: vscode.LanguageModelToolInvocationOptions<DiagnosticsInput>, _token: vscode.CancellationToken): Promise<vscode.LanguageModelToolResult> {
+export class DiagnosticsTool implements vscode.LanguageModelTool<{ filePath?: string; severity?: 'error' | 'warning' | 'all' }> {
+	async invoke(
+		options: vscode.LanguageModelToolInvocationOptions<{ filePath?: string; severity?: 'error' | 'warning' | 'all' }>,
+		_token: vscode.CancellationToken
+	): Promise<vscode.LanguageModelToolResult> {
 		const severityFilter = options.input.severity ?? 'all';
 		let diags = vscode.languages.getDiagnostics();
 
 		if (options.input.filePath) {
 			const root = workspaceRoot();
-			const absPath = root ? path.resolve(root, options.input.filePath) : options.input.filePath;
-			const uri = vscode.Uri.file(absPath);
-			const fileDiags = vscode.languages.getDiagnostics(uri);
-			diags = [[uri, fileDiags]];
+			const uri = root
+				? vscode.Uri.joinPath(vscode.Uri.file(root), options.input.filePath)
+				: vscode.Uri.file(options.input.filePath);
+			diags = [[uri, vscode.languages.getDiagnostics(uri)]];
 		}
 
 		const lines: string[] = [];

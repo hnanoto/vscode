@@ -170,9 +170,9 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
 	provider = buildProvider();
 
 	// Initialize workspace memory
-	const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-	if (workspaceRoot) {
-		memory = new WorkspaceMemory(workspaceRoot);
+	const workspaceFolderUri = vscode.workspace.workspaceFolders?.[0]?.uri;
+	if (workspaceFolderUri) {
+		memory = new WorkspaceMemory(workspaceFolderUri);
 		await memory.initializeDefaults('HCode');
 	}
 

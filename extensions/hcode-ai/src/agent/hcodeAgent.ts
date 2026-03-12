@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 import * as vscode from 'vscode';
-import * as cp from 'node:child_process';
 import type { IHCodeProvider, IMessage } from '../providers/baseProvider';
 import type { WorkspaceMemory } from '../memory/workspaceMemory';
 import type { HCodeAIStatusBar } from '../ui/statusBar';
@@ -119,8 +118,29 @@ export class HCodeAgent {
 			return;
 		}
 
-		const diff = await new Promise<string>((resolve) => {
-			cp.exec('git diff --cached', { cwd: root, timeout: 10_000 }, (_err: Error | null, stdout: string) => resolve(stdout.trim()));
+		const diff = await new Promise<string>(resolve => {
+			const tmpOut = vscode.Uri.joinPath(vscode.Uri.file(root), `.hcode-ai-diff-${Date.now()}.txt`).fsPath;
+			const cmd = `git diff --cached > "${tmpOut}" 2>&1`;
+			const task = new vscode.Task(
+				{ type: 'hcode-ai-git' }, vscode.TaskScope.Workspace,
+				'hcode-ai-git', 'HCode AI',
+				new vscode.ShellExecution(cmd, { cwd: root })
+			);
+			task.presentationOptions = { reveal: vscode.TaskRevealKind.Never, panel: vscode.TaskPanelKind.Dedicated };
+			vscode.tasks.executeTask(task).then(exec => {
+				const done = vscode.tasks.onDidEndTask(e => {
+					if (e.execution !== exec) { return; }
+					done.dispose();
+					vscode.workspace.fs.readFile(vscode.Uri.file(tmpOut)).then(
+						bytes => {
+							const text = new TextDecoder().decode(bytes).trim();
+							vscode.workspace.fs.delete(vscode.Uri.file(tmpOut)).then(undefined, undefined);
+							resolve(text);
+						},
+						() => resolve('')
+					);
+				});
+			}, () => resolve(''));
 		});
 
 		if (!diff) {
