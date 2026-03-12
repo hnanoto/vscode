@@ -1,6 +1,6 @@
 {
-	"version": "88cade50fa3aa60a8dd6a1d7b29ad05b5d8dd6e6",
+	"version": "64ed5ba3c376a322910ec9caa8fdc3b0bc6a171d",
 	"productVersion": "1.112.0",
-	"url": "https://github.com/hnanoto/vscode/releases/download/hcode-88cade50fa3a/HCodeUserSetup-x64.exe",
-	"sha256hash": "3298c5780c44ad20b44894203254efd9e18d89f0762579b8a6752af3824efa2d"
+	"url": "https://github.com/hnanoto/vscode/releases/download/hcode-64ed5ba3c376/HCodeUserSetup-x64.exe",
+	"sha256hash": "cbfe3c40f4b761c3c10b576a3dcb65674f3ea79d657561e0ac3fe6b7e6bee0e3"
 }
