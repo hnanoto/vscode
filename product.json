@@ -92,21 +92,29 @@
 			}
 		}
 	],
+	"extensionEnabledApiProposals": {
+		"hcode.hcode-ai": [
+			"chatProvider",
+			"defaultChatParticipant",
+			"languageModelSystem",
+			"languageModelCapabilities",
+			"chatParticipantAdditions",
+			"languageModelThinkingPart"
+		]
+	},
 	"defaultChatAgent": {
-		"extensionId": "GitHub.copilot",
-		"chatExtensionId": "GitHub.copilot-chat",
-		"chatExtensionOutputId": "GitHub.copilot-chat.GitHub Copilot Chat.log",
-		"chatExtensionOutputExtensionStateCommand": "github.copilot.debug.extensionState",
-		"documentationUrl": "https://aka.ms/github-copilot-overview",
-		"termsStatementUrl": "https://aka.ms/github-copilot-terms-statement",
-		"privacyStatementUrl": "https://aka.ms/github-copilot-privacy-statement",
-		"skusDocumentationUrl": "https://aka.ms/github-copilot-plans",
-		"publicCodeMatchesUrl": "https://aka.ms/github-copilot-match-public-code",
-		"manageSettingsUrl": "https://aka.ms/github-copilot-settings",
-		"managePlanUrl": "https://aka.ms/github-copilot-manage-plan",
-		"manageOverageUrl": "https://aka.ms/github-copilot-manage-overage",
-		"upgradePlanUrl": "https://aka.ms/github-copilot-upgrade-plan",
-		"signUpUrl": "https://aka.ms/github-sign-up",
+		"extensionId": "hcode.hcode-ai",
+		"chatExtensionId": "hcode.hcode-ai",
+		"documentationUrl": "https://github.com/hnanoto/vscode/wiki/ai",
+		"termsStatementUrl": "https://github.com/hnanoto/vscode/blob/main/LICENSE.txt",
+		"privacyStatementUrl": "https://github.com/hnanoto/vscode/blob/main/SECURITY.md",
+		"skusDocumentationUrl": "https://github.com/hnanoto/vscode",
+		"publicCodeMatchesUrl": "https://github.com/hnanoto/vscode",
+		"manageSettingsUrl": "https://github.com/hnanoto/vscode",
+		"managePlanUrl": "https://github.com/hnanoto/vscode",
+		"manageOverageUrl": "https://github.com/hnanoto/vscode",
+		"upgradePlanUrl": "https://github.com/hnanoto/vscode",
+		"signUpUrl": "https://github.com/hnanoto/vscode",
 		"provider": {
 			"default": {
 				"id": "github",

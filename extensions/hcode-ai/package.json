@@ -1,0 +1,477 @@
+{
+	"name": "hcode-ai",
+	"displayName": "HCode AI",
+	"description": "Built-in AI assistant for HCode. Supports Ollama (local), Google Gemini, OpenAI/Codex, Anthropic Claude and more.",
+	"version": "1.0.0",
+	"publisher": "hcode",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/hnanoto/vscode.git"
+	},
+	"engines": {
+		"vscode": "^1.112.0"
+	},
+	"enabledApiProposals": [
+		"chatProvider",
+		"defaultChatParticipant",
+		"languageModelSystem",
+		"languageModelCapabilities"
+	],
+	"capabilities": {
+		"virtualWorkspaces": true,
+		"untrustedWorkspaces": {
+			"supported": true
+		}
+	},
+	"main": "./dist/extension",
+	"activationEvents": [
+		"onStartupFinished"
+	],
+	"contributes": {
+		"chatParticipants": [
+			{
+				"id": "hcode.ai",
+				"fullName": "HCode AI",
+				"name": "hcode",
+				"description": "Your built-in AI coding assistant — works with Ollama, Gemini, OpenAI, Claude and more",
+				"isDefault": true,
+				"commands": [
+					{
+						"name": "explain",
+						"description": "Explain selected code in detail"
+					},
+					{
+						"name": "fix",
+						"description": "Find and fix bugs in selection"
+					},
+					{
+						"name": "test",
+						"description": "Generate unit tests for selected code"
+					},
+					{
+						"name": "doc",
+						"description": "Generate documentation for selection"
+					},
+					{
+						"name": "refactor",
+						"description": "Refactor and improve selected code"
+					},
+					{
+						"name": "review",
+						"description": "Code review with suggestions"
+					},
+					{
+						"name": "commit",
+						"description": "Generate a conventional commit message from staged changes"
+					},
+					{
+						"name": "setup",
+						"description": "Configure HCode AI provider and model"
+					}
+				],
+				"when": "config.hcode.ai.enabled"
+			}
+		],
+		"languageModels": [
+			{
+				"vendor": "hcode-ollama"
+			},
+			{
+				"vendor": "hcode-gemini"
+			},
+			{
+				"vendor": "hcode-openai"
+			},
+			{
+				"vendor": "hcode-anthropic"
+			}
+		],
+		"languageModelTools": [
+			{
+				"name": "hcode_readFile",
+				"displayName": "Read File",
+				"toolReferenceName": "readFile",
+				"canBeReferencedInPrompt": false,
+				"modelDescription": "Reads the content of a file from the workspace.",
+				"userDescription": "Read a file from the workspace.",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"filePath": {
+							"type": "string",
+							"description": "Relative path to the file from workspace root"
+						},
+						"startLine": {
+							"type": "number",
+							"description": "Optional: first line (1-indexed)"
+						},
+						"endLine": {
+							"type": "number",
+							"description": "Optional: last line (1-indexed)"
+						}
+					},
+					"required": ["filePath"]
+				}
+			},
+			{
+				"name": "hcode_listDirectory",
+				"displayName": "List Directory",
+				"toolReferenceName": "listDirectory",
+				"canBeReferencedInPrompt": false,
+				"modelDescription": "Lists files and directories inside a workspace directory.",
+				"userDescription": "List files in a directory.",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"dirPath": {
+							"type": "string",
+							"description": "Relative path to directory from workspace root. Use '.' for root."
+						},
+						"maxDepth": {
+							"type": "number",
+							"description": "Max depth to recurse. Default is 1."
+						}
+					},
+					"required": ["dirPath"]
+				}
+			},
+			{
+				"name": "hcode_runTerminal",
+				"displayName": "Run Terminal Command",
+				"toolReferenceName": "runTerminal",
+				"canBeReferencedInPrompt": false,
+				"modelDescription": "Runs a shell command in the workspace terminal and returns its output.",
+				"userDescription": "Execute a terminal command.",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"command": {
+							"type": "string",
+							"description": "Shell command to execute"
+						},
+						"cwd": {
+							"type": "string",
+							"description": "Working directory (relative to workspace root). Defaults to workspace root."
+						}
+					},
+					"required": ["command"]
+				}
+			},
+			{
+				"name": "hcode_searchCode",
+				"displayName": "Search Codebase",
+				"toolReferenceName": "searchCode",
+				"canBeReferencedInPrompt": false,
+				"modelDescription": "Searches for a pattern in the workspace. Returns matching file paths and lines.",
+				"userDescription": "Search for a pattern in the workspace.",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"pattern": {
+							"type": "string",
+							"description": "Search pattern (string or regex)"
+						},
+						"filePattern": {
+							"type": "string",
+							"description": "Glob pattern to filter files. E.g. '**/*.ts'"
+						},
+						"isRegex": {
+							"type": "boolean",
+							"description": "Whether pattern is a regex. Default false."
+						}
+					},
+					"required": ["pattern"]
+				}
+			},
+			{
+				"name": "hcode_gitStatus",
+				"displayName": "Git Status",
+				"toolReferenceName": "gitStatus",
+				"canBeReferencedInPrompt": false,
+				"modelDescription": "Returns current git status: staged, unstaged, and untracked files, plus recent commits.",
+				"userDescription": "Check git status of the workspace.",
+				"inputSchema": {
+					"type": "object",
+					"properties": {}
+				}
+			},
+			{
+				"name": "hcode_getDiagnostics",
+				"displayName": "Get Diagnostics",
+				"toolReferenceName": "getDiagnostics",
+				"canBeReferencedInPrompt": false,
+				"modelDescription": "Returns TypeScript/language server errors and warnings for specified files.",
+				"userDescription": "Get errors and warnings from the language server.",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"filePath": {
+							"type": "string",
+							"description": "Optional: file to get diagnostics for. If omitted, returns workspace-wide diagnostics."
+						},
+						"severity": {
+							"type": "string",
+							"enum": ["error", "warning", "all"],
+							"description": "Filter by severity. Default is 'all'."
+						}
+					}
+				}
+			},
+			{
+				"name": "hcode_webSearch",
+				"displayName": "Web Search",
+				"toolReferenceName": "webSearch",
+				"canBeReferencedInPrompt": true,
+				"modelDescription": "Searches the web for information to answer questions or solve problems.",
+				"userDescription": "Search the web for information.",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"query": {
+							"type": "string",
+							"description": "Search query"
+						}
+					},
+					"required": ["query"]
+				}
+			}
+		],
+		"configuration": {
+			"title": "HCode AI",
+			"properties": {
+				"hcode.ai.enabled": {
+					"type": "boolean",
+					"default": true,
+					"description": "Enable HCode AI assistant",
+					"scope": "application"
+				},
+				"hcode.ai.provider": {
+					"type": "string",
+					"enum": ["ollama", "gemini", "openai", "anthropic"],
+					"enumDescriptions": [
+						"Ollama — run models locally (free, private, no internet required)",
+						"Google Gemini — Google's AI models (free tier available)",
+						"OpenAI / Codex — GPT-4, GPT-4o, Codex and compatible APIs",
+						"Anthropic Claude — Claude 3.5, Claude 3 Haiku, etc."
+					],
+					"default": "ollama",
+					"description": "AI provider to use for HCode AI",
+					"scope": "application"
+				},
+				"hcode.ai.ollama.endpoint": {
+					"type": "string",
+					"default": "http://localhost:11434",
+					"description": "Ollama API endpoint",
+					"scope": "application"
+				},
+				"hcode.ai.ollama.model": {
+					"type": "string",
+					"default": "qwen2.5-coder:7b",
+					"description": "Ollama model to use (e.g. codellama:13b, deepseek-coder:6.7b, qwen2.5-coder:7b, phi4:14b)",
+					"scope": "application"
+				},
+				"hcode.ai.gemini.apiKey": {
+					"type": "string",
+					"default": "",
+					"description": "Google Gemini API key (get one free at aistudio.google.com)",
+					"scope": "application"
+				},
+				"hcode.ai.gemini.model": {
+					"type": "string",
+					"enum": ["gemini-2.5-pro-exp-03-25", "gemini-2.0-flash", "gemini-2.0-flash-thinking-exp", "gemini-1.5-pro"],
+					"enumDescriptions": [
+						"Gemini 2.5 Pro (experimental) — most capable",
+						"Gemini 2.0 Flash — fast and free",
+						"Gemini 2.0 Flash Thinking — reasoning model",
+						"Gemini 1.5 Pro — stable production model"
+					],
+					"default": "gemini-2.0-flash",
+					"description": "Google Gemini model to use",
+					"scope": "application"
+				},
+				"hcode.ai.openai.apiKey": {
+					"type": "string",
+					"default": "",
+					"description": "OpenAI API key (also works with compatible APIs like Groq, Together, etc.)",
+					"scope": "application"
+				},
+				"hcode.ai.openai.endpoint": {
+					"type": "string",
+					"default": "https://api.openai.com/v1",
+					"description": "OpenAI-compatible API endpoint (change for Groq, Together, local etc.)",
+					"scope": "application"
+				},
+				"hcode.ai.openai.model": {
+					"type": "string",
+					"enum": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1", "o3-mini", "codex-mini-latest"],
+					"enumDescriptions": [
+						"GPT-4o — best for coding tasks",
+						"GPT-4o Mini — fast and affordable",
+						"GPT-4 Turbo — previous generation",
+						"o1 — advanced reasoning",
+						"o3-mini — fast reasoning",
+						"Codex Mini — optimized for code completion"
+					],
+					"default": "gpt-4o",
+					"description": "OpenAI model to use",
+					"scope": "application"
+				},
+				"hcode.ai.anthropic.apiKey": {
+					"type": "string",
+					"default": "",
+					"description": "Anthropic API key",
+					"scope": "application"
+				},
+				"hcode.ai.anthropic.model": {
+					"type": "string",
+					"enum": ["claude-opus-4-5", "claude-sonnet-4-5", "claude-3-5-haiku-latest", "claude-3-7-sonnet-latest"],
+					"enumDescriptions": [
+						"Claude Opus — most capable",
+						"Claude Sonnet — balanced performance",
+						"Claude 3.5 Haiku — fastest and cheapest",
+						"Claude 3.7 Sonnet — extended thinking"
+					],
+					"default": "claude-sonnet-4-5",
+					"description": "Anthropic Claude model to use",
+					"scope": "application"
+				},
+				"hcode.ai.memory.enabled": {
+					"type": "boolean",
+					"default": true,
+					"description": "Enable workspace AI memory (stores context in .hcode/ai-memory/)",
+					"scope": "workspace"
+				},
+				"hcode.ai.agent.autoApproveTerminal": {
+					"type": "boolean",
+					"default": false,
+					"description": "Auto-approve terminal commands run by the AI agent (use with caution)",
+					"scope": "workspace"
+				},
+				"hcode.ai.statusBar.enabled": {
+					"type": "boolean",
+					"default": true,
+					"description": "Show AI provider status in the status bar",
+					"scope": "application"
+				}
+			}
+		},
+		"commands": [
+			{
+				"command": "hcode.ai.setup",
+				"title": "HCode AI: Configure Provider"
+			},
+			{
+				"command": "hcode.ai.switchProvider",
+				"title": "HCode AI: Switch AI Provider"
+			},
+			{
+				"command": "hcode.ai.switchModel",
+				"title": "HCode AI: Switch Model"
+			},
+			{
+				"command": "hcode.ai.clearMemory",
+				"title": "HCode AI: Clear Workspace Memory"
+			},
+			{
+				"command": "hcode.ai.viewMemory",
+				"title": "HCode AI: View Workspace Memory"
+			},
+			{
+				"command": "hcode.ai.generateCommitMessage",
+				"title": "HCode AI: Generate Commit Message"
+			},
+			{
+				"command": "hcode.ai.explainSelection",
+				"title": "HCode AI: Explain Selection"
+			},
+			{
+				"command": "hcode.ai.fixSelection",
+				"title": "HCode AI: Fix Selection"
+			},
+			{
+				"command": "hcode.ai.testSelection",
+				"title": "HCode AI: Generate Tests"
+			}
+		],
+		"menus": {
+			"editor/context": [
+				{
+					"command": "hcode.ai.explainSelection",
+					"when": "editorHasSelection",
+					"group": "hcode.ai@1"
+				},
+				{
+					"command": "hcode.ai.fixSelection",
+					"when": "editorHasSelection",
+					"group": "hcode.ai@2"
+				},
+				{
+					"command": "hcode.ai.testSelection",
+					"when": "editorHasSelection",
+					"group": "hcode.ai@3"
+				}
+			],
+			"scm/title": [
+				{
+					"command": "hcode.ai.generateCommitMessage",
+					"group": "hcode.ai@1",
+					"when": "scmProvider == git"
+				}
+			]
+		},
+		"keybindings": [
+			{
+				"command": "hcode.ai.explainSelection",
+				"key": "ctrl+shift+e",
+				"mac": "cmd+shift+e",
+				"when": "editorHasSelection"
+			}
+		],
+		"walkthroughs": [
+			{
+				"id": "hcode.ai.gettingStarted",
+				"title": "Getting Started with HCode AI",
+				"description": "Set up your AI assistant and start coding smarter",
+				"steps": [
+					{
+						"id": "hcode.ai.gettingStarted.chooseProvider",
+						"title": "Choose Your AI Provider",
+						"description": "Pick Ollama for local privacy, Gemini for free cloud AI, or OpenAI/Claude for premium models.\n[Configure Provider](command:hcode.ai.setup)",
+						"media": {
+							"image": "media/provider-setup.png",
+							"altText": "HCode AI provider selection"
+						}
+					},
+					{
+						"id": "hcode.ai.gettingStarted.firstChat",
+						"title": "Start Chatting",
+						"description": "Open the chat panel and ask HCode AI anything about your code.\n[Open Chat](command:workbench.action.chat.open)",
+						"media": {
+							"image": "media/chat-demo.png",
+							"altText": "HCode AI chat demo"
+						}
+					},
+					{
+						"id": "hcode.ai.gettingStarted.memory",
+						"title": "Workspace Memory",
+						"description": "HCode AI remembers your project context between sessions in .hcode/ai-memory/",
+						"media": {
+							"image": "media/memory-demo.png",
+							"altText": "HCode AI workspace memory"
+						}
+					}
+				]
+			}
+		]
+	},
+	"scripts": {
+		"compile": "gulp compile-extension:hcode-ai",
+		"watch": "gulp watch-extension:hcode-ai",
+		"vscode:prepublish": "node ./esbuild.mts",
+		"build": "node ./esbuild.mts"
+	},
+	"devDependencies": {
+		"@types/node": "^20.x"
+	}
+}
