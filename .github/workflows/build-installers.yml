@@ -152,15 +152,39 @@ jobs:
       - name: Install dependencies
         run: |
           set -euo pipefail
+
+          dump_npm_logs() {
+            echo "::group::npm debug logs"
+            if [ -d "$HOME/.npm/_logs" ]; then
+              find "$HOME/.npm/_logs" -type f -name '*-debug-*.log' | sort | tail -n 10 | while read -r log_file; do
+                echo "--- $log_file ---"
+                tail -n 200 "$log_file" || true
+              done
+            else
+              echo "No npm logs found in $HOME/.npm/_logs"
+            fi
+            echo "::endgroup::"
+          }
+
+          c++ --version
+          xcode-select -print-path
+          node --version
+          npm --version
+          npm config get cache
+          python3 --version
           python3 -m pip install --break-system-packages setuptools
 
           for i in {1..5}; do
-            npm ci && break
+            if npm ci; then
+              break
+            fi
+            dump_npm_logs
             if [ "$i" -eq 5 ]; then
               echo "npm ci failed too many times" >&2
               exit 1
             fi
             echo "npm ci failed attempt $i, retrying..."
+            sleep 2
           done
         env:
           npm_config_arch: ${{ env.NPM_ARCH }}
