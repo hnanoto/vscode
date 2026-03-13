@@ -11,6 +11,8 @@ import type { IHCodeProvider } from '../providers/baseProvider';
  */
 export class HCodeAIStatusBar {
 	private readonly item: vscode.StatusBarItem;
+	private lastModelName: string | undefined;
+	private lastProviderName: string | undefined;
 
 	constructor(private readonly getProvider: () => IHCodeProvider | undefined) {
 		this.item = vscode.window.createStatusBarItem(
@@ -24,15 +26,19 @@ export class HCodeAIStatusBar {
 		this.item.show();
 	}
 
-	update(modelName?: string): void {
+	update(modelName?: string, providerName?: string): void {
 		const provider = this.getProvider();
-		if (!provider) {
+		const resolvedProviderName = providerName ?? provider?.name;
+
+		if (!resolvedProviderName) {
 			this.item.text = '$(robot) HCode AI: Not configured';
 			this.item.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
 			return;
 		}
-		const model = modelName ?? '...';
-		this.item.text = `$(sparkle) ${provider.name} · ${model}`;
+
+		this.lastProviderName = resolvedProviderName;
+		this.lastModelName = modelName ?? this.lastModelName ?? '...';
+		this.item.text = `$(sparkle) ${this.lastProviderName} · ${this.lastModelName}`;
 		this.item.backgroundColor = undefined;
 	}
 

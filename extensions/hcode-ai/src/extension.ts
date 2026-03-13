@@ -5,14 +5,9 @@
 import * as vscode from 'vscode';
 import { OllamaProvider } from './providers/ollamaProvider';
 import { GeminiProvider } from './providers/geminiProvider';
-import { OpenAIProvider } from './providers/openaiProvider';
-import { AnthropicProvider } from './providers/anthropicProvider';
-import { GroqProvider } from './providers/groqProvider';
-import { DeepSeekProvider } from './providers/deepseekProvider';
-import { GitHubModelsProvider } from './providers/githubModelsProvider';
-import { OpenRouterProvider } from './providers/openrouterProvider';
-import { GrokProvider } from './providers/grokProvider';
 import type { IHCodeProvider } from './providers/baseProvider';
+import { registerNativeLanguageModelProviders } from './providers/nativeLanguageModelProvider';
+import { buildConfiguredProvider, getConfiguredModel } from './providers/providerRegistry';
 import { WorkspaceMemory } from './memory/workspaceMemory';
 import { HCodeAIStatusBar } from './ui/statusBar';
 import { HCodeAgent, HCODE_PARTICIPANT_ID } from './agent/hcodeAgent';
@@ -35,39 +30,9 @@ function cfg<T>(key: string): T {
 	return vscode.workspace.getConfiguration('hcode.ai').get<T>(key) as T;
 }
 
-/** Builds the active provider from current settings. */
-function buildProvider(): IHCodeProvider {
-	const providerName = cfg<string>('provider');
-	switch (providerName) {
-		case 'gemini':
-			currentModel = cfg<string>('gemini.model');
-			return new GeminiProvider(cfg<string>('gemini.apiKey'));
-		case 'openai':
-			currentModel = cfg<string>('openai.model');
-			return new OpenAIProvider(cfg<string>('openai.apiKey'), cfg<string>('openai.endpoint'));
-		case 'anthropic':
-			currentModel = cfg<string>('anthropic.model');
-			return new AnthropicProvider(cfg<string>('anthropic.apiKey'));
-		case 'groq':
-			currentModel = cfg<string>('groq.model');
-			return new GroqProvider(cfg<string>('groq.apiKey'));
-		case 'deepseek':
-			currentModel = cfg<string>('deepseek.model');
-			return new DeepSeekProvider(cfg<string>('deepseek.apiKey'));
-		case 'github':
-			currentModel = cfg<string>('github.model');
-			return new GitHubModelsProvider(cfg<string>('github.token'));
-		case 'openrouter':
-			currentModel = cfg<string>('openrouter.model');
-			return new OpenRouterProvider(cfg<string>('openrouter.apiKey'));
-		case 'grok':
-			currentModel = cfg<string>('grok.model');
-			return new GrokProvider(cfg<string>('grok.apiKey'));
-		case 'ollama':
-		default:
-			currentModel = cfg<string>('ollama.model');
-			return new OllamaProvider(cfg<string>('ollama.endpoint'));
-	}
+function rebuildConfiguredProvider(): void {
+	provider = buildConfiguredProvider();
+	currentModel = getConfiguredModel();
 }
 
 /** Registers all agentic tools. */
@@ -98,38 +63,38 @@ async function runSetupWizard(): Promise<void> {
 		},
 		{
 			label: '$(sparkle) Google Gemini',
-			description: '🆓 Free tier 2M tokens/month • Google Search grounding • Thinking mode',
-			detail: 'Models: gemini-2.5-pro (best!), gemini-2.0-flash (free), gemini-2.0-flash-thinking',
+			description: '🆓 Free tier available • Google Search grounding • Thinking mode',
+			detail: 'Models: gemini-2.5-flash, gemini-2.5-flash-lite, gemini-2.5-pro',
 			value: 'gemini',
 		},
 		{
 			label: '$(zap) Groq — Ultra Fast',
-			description: '🆓 Free 14.400 req/day • Fastest inference on Earth',
-			detail: 'Models: llama-3.3-70b, mixtral-8x7b, gemma2-9b',
+			description: '🆓 Free plan with rate limits • Very fast hosted inference',
+			detail: 'Models: qwen/qwen3-32b, openai/gpt-oss-120b, kimi-k2, llama-4-scout',
 			value: 'groq',
 		},
 		{
 			label: '$(hubot) DeepSeek',
-			description: '🆓 Free $5 credit • Best coding AI • R1 reasoning visible',
+			description: '💸 Low cost • Strong coding and reasoning • R1 visible reasoning',
 			detail: 'Models: deepseek-chat (V3), deepseek-reasoner (R1)',
 			value: 'deepseek',
 		},
 		{
 			label: '$(github) GitHub Models',
-			description: '🆓 Free with GitHub account • No extra signup',
-			detail: 'Models: gpt-4o-mini, phi-4, llama-3.3-70b, mistral-large',
+			description: '🆓 Included free, rate-limited • No separate provider billing',
+			detail: 'Models: gpt-4o-mini, Phi-4, Llama, Mistral and more',
 			value: 'github',
 		},
 		{
 			label: '$(globe) OpenRouter',
-			description: '🆓 Free models available • 200+ models gateway',
-			detail: 'Models: qwen-2.5-coder:free, deepseek-r1:free, gemma-3-27b:free',
+			description: '🆓 Free router and free models available • 200+ models gateway',
+			detail: 'Models: openrouter/free, qwen free, DeepSeek free, Gemma free',
 			value: 'openrouter',
 		},
 		{
 			label: '$(robot) Grok (xAI)',
-			description: '💳 Paid • xAI\'s flagship model • Strong reasoning',
-			detail: 'Models: grok-3, grok-3-mini, grok-2',
+			description: '💳 Paid • xAI API access • Strong reasoning',
+			detail: 'Models: grok-4, grok-3, grok-3-mini',
 			value: 'grok',
 		},
 		{
@@ -146,7 +111,7 @@ async function runSetupWizard(): Promise<void> {
 		},
 	], {
 		title: 'HCode AI — Choose Your AI Provider',
-		placeHolder: '🆓 = Free tier available  •  💳 = Paid only',
+		placeHolder: '🆓 = Free or free-tier available  •  💳 = Paid only',
 	});
 
 	if (!choice) { return; }
@@ -157,7 +122,7 @@ async function runSetupWizard(): Promise<void> {
 	if (choice.value === 'gemini') {
 		const key = await vscode.window.showInputBox({
 			title: '$(sparkle) Google Gemini API Key',
-			prompt: 'Get your free key at aistudio.google.com — 2M tokens/month free!',
+			prompt: 'Get your Gemini Developer API key at aistudio.google.com',
 			password: true,
 			placeHolder: 'AIza...',
 		});
@@ -168,16 +133,16 @@ async function runSetupWizard(): Promise<void> {
 			const models = await geminiProvider.listModels();
 			if (models.length > 0) {
 				const modelItems = [
-					{ label: '$(sparkle) gemini-2.5-pro-exp-03-25', description: 'Most capable — like Google Antigravity', value: 'gemini-2.5-pro-exp-03-25' },
-					{ label: '$(zap) gemini-2.0-flash', description: '🆓 Fast & free tier', value: 'gemini-2.0-flash' },
-					{ label: '$(brain) gemini-2.0-flash-thinking-exp', description: '🆓 Free with visible reasoning', value: 'gemini-2.0-flash-thinking-exp' },
+					{ label: '$(zap) gemini-2.5-flash', description: '🆓 Best default with free tier support', value: 'gemini-2.5-flash' },
+					{ label: '$(rocket) gemini-2.5-flash-lite', description: '🆓 Fastest and cheapest Gemini 2.5 option', value: 'gemini-2.5-flash-lite' },
+					{ label: '$(sparkle) gemini-2.5-pro', description: 'Most capable Gemini model', value: 'gemini-2.5-pro' },
 					...models
-						.filter(m => !['gemini-2.5-pro-exp-03-25', 'gemini-2.0-flash', 'gemini-2.0-flash-thinking-exp'].includes(m))
+						.filter(m => !['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'].includes(m))
 						.map(m => ({ label: m, description: '', value: m }))
 				];
 				const modelChoice = await vscode.window.showQuickPick(modelItems, {
 					title: 'Select Gemini Model',
-					placeHolder: 'gemini-2.5-pro is the most capable (like Antigravity)',
+					placeHolder: 'gemini-2.5-flash is the best default for the free tier',
 				});
 				if (modelChoice) {
 					await config.update('gemini.model', modelChoice.value, vscode.ConfigurationTarget.Global);
@@ -187,24 +152,24 @@ async function runSetupWizard(): Promise<void> {
 	} else if (choice.value === 'groq') {
 		const key = await vscode.window.showInputBox({
 			title: '$(zap) Groq API Key',
-			prompt: 'Free at console.groq.com — 14.400 requests/day, no credit card',
+			prompt: 'Get your Groq API key at console.groq.com (free plan available)',
 			password: true,
 			placeHolder: 'gsk_...',
 		});
 		if (key) {
 			await config.update('groq.apiKey', key, vscode.ConfigurationTarget.Global);
 			const model = await vscode.window.showQuickPick([
-				{ label: 'llama-3.3-70b-versatile', description: 'Best quality — free' },
-				{ label: 'mixtral-8x7b-32768', description: '32K context — free' },
-				{ label: 'gemma2-9b-it', description: 'Fast, Google model — free' },
-				{ label: 'llama-3.1-8b-instant', description: 'Ultra fast — free' },
+				{ label: 'qwen/qwen3-32b', description: 'Best coding default on the free plan' },
+				{ label: 'openai/gpt-oss-120b', description: 'Open-weight reasoning and coding model' },
+				{ label: 'moonshotai/kimi-k2-instruct', description: 'Strong coding and agentic behavior' },
+				{ label: 'meta-llama/llama-4-scout-17b-16e-instruct', description: 'Fast multimodal Llama 4 model' },
 			], { title: 'Select Groq Model' });
 			if (model) { await config.update('groq.model', model.label, vscode.ConfigurationTarget.Global); }
 		}
 	} else if (choice.value === 'deepseek') {
 		const key = await vscode.window.showInputBox({
 			title: '$(hubot) DeepSeek API Key',
-			prompt: 'Get $5 free credit at platform.deepseek.com — best coding AI',
+			prompt: 'Get your DeepSeek API key at platform.deepseek.com (very low cost; granted balance may apply)',
 			password: true,
 			placeHolder: 'sk-...',
 		});
@@ -219,36 +184,36 @@ async function runSetupWizard(): Promise<void> {
 	} else if (choice.value === 'github') {
 		const token = await vscode.window.showInputBox({
 			title: '$(github) GitHub Personal Access Token',
-			prompt: 'Create a token at github.com/settings/tokens — select "models" scope',
+			prompt: 'Create a token that can access GitHub Models at github.com/settings/tokens',
 			password: true,
 			placeHolder: 'ghp_...',
 		});
 		if (token) {
 			await config.update('github.token', token, vscode.ConfigurationTarget.Global);
 			const model = await vscode.window.showQuickPick([
-				{ label: 'gpt-4o-mini', description: 'Fast GPT-4o — free' },
-				{ label: 'gpt-4o', description: 'Best GPT-4o — free (rate limited)' },
-				{ label: 'Phi-4', description: 'Microsoft Phi-4 — fast & free' },
-				{ label: 'Meta-Llama-3.3-70B-Instruct', description: 'Llama 3.3 — free' },
-				{ label: 'Mistral-large-2411', description: 'Mistral Large — free' },
+				{ label: 'gpt-4o-mini', description: 'Fast default model for GitHub Models' },
+				{ label: 'gpt-4o', description: 'Higher quality, rate-limited included usage' },
+				{ label: 'Phi-4', description: 'Microsoft Phi-4 on GitHub Models' },
+				{ label: 'Meta-Llama-3.3-70B-Instruct', description: 'Llama family model on GitHub Models' },
+				{ label: 'Mistral-large-2411', description: 'Mistral model on GitHub Models' },
 			], { title: 'Select GitHub Model' });
 			if (model) { await config.update('github.model', model.label, vscode.ConfigurationTarget.Global); }
 		}
 	} else if (choice.value === 'openrouter') {
 		const key = await vscode.window.showInputBox({
 			title: '$(globe) OpenRouter API Key',
-			prompt: 'Free at openrouter.ai/keys — no credit card needed for free models',
+			prompt: 'Get your OpenRouter API key at openrouter.ai/keys (use openrouter/free for the free router)',
 			password: true,
 			placeHolder: 'sk-or-...',
 		});
 		if (key) {
 			await config.update('openrouter.apiKey', key, vscode.ConfigurationTarget.Global);
 			const model = await vscode.window.showQuickPick([
-				{ label: 'qwen/qwen-2.5-coder-32b-instruct:free', description: '🆓 Best free coding model' },
-				{ label: 'deepseek/deepseek-r1:free', description: '🆓 Free reasoning model' },
-				{ label: 'google/gemma-3-27b-it:free', description: '🆓 Free Google Gemma 3' },
-				{ label: 'meta-llama/llama-3.3-70b-instruct:free', description: '🆓 Free Llama 3.3' },
-				{ label: 'microsoft/phi-4:free', description: '🆓 Free Microsoft Phi-4' },
+				{ label: 'openrouter/free', description: '🆓 OpenRouter free router across free providers' },
+				{ label: 'qwen/qwen-2.5-coder-32b-instruct:free', description: '🆓 Strong free coding model' },
+				{ label: 'deepseek/deepseek-r1:free', description: '🆓 Free reasoning model when available' },
+				{ label: 'google/gemma-3-27b-it:free', description: '🆓 Free Gemma model' },
+				{ label: 'microsoft/phi-4:free', description: '🆓 Free Phi-4 model' },
 				{ label: 'anthropic/claude-3.7-sonnet', description: '💳 Claude 3.7 Sonnet' },
 				{ label: 'openai/gpt-4o', description: '💳 GPT-4o' },
 			], { title: 'Select OpenRouter Model' });
@@ -257,16 +222,16 @@ async function runSetupWizard(): Promise<void> {
 	} else if (choice.value === 'grok') {
 		const key = await vscode.window.showInputBox({
 			title: '$(robot) Grok (xAI) API Key',
-			prompt: 'Get your key at console.x.ai',
+			prompt: 'Get your paid xAI API key at console.x.ai',
 			password: true,
 			placeHolder: 'xai-...',
 		});
 		if (key) {
 			await config.update('grok.apiKey', key, vscode.ConfigurationTarget.Global);
 			const model = await vscode.window.showQuickPick([
-				{ label: 'grok-3', description: 'Most capable Grok' },
-				{ label: 'grok-3-mini', description: 'Fast & cost-effective' },
-				{ label: 'grok-2', description: 'Stable version' },
+				{ label: 'grok-4', description: 'Current flagship Grok model' },
+				{ label: 'grok-3', description: 'Previous flagship Grok model' },
+				{ label: 'grok-3-mini', description: 'Fast and lower-cost Grok model' },
 			], { title: 'Select Grok Model' });
 			if (model) { await config.update('grok.model', model.label, vscode.ConfigurationTarget.Global); }
 		}
@@ -332,14 +297,14 @@ async function runSetupWizard(): Promise<void> {
 	}
 
 	// Rebuild provider after config change
-	provider = buildProvider();
+	rebuildConfiguredProvider();
 	statusBar?.update(currentModel);
 	vscode.window.showInformationMessage(`✅ HCode AI configured: ${provider.name} · ${currentModel}`);
 }
 
 export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
 	// Initialize provider
-	provider = buildProvider();
+	rebuildConfiguredProvider();
 
 	// Initialize workspace memory
 	const workspaceFolderUri = vscode.workspace.workspaceFolders?.[0]?.uri;
@@ -353,10 +318,11 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
 	statusBar.update(currentModel);
 	ctx.subscriptions.push({ dispose: () => statusBar?.dispose() });
 
+	// Register HCode language models in the native VS Code model picker
+	registerNativeLanguageModelProviders(ctx);
+
 	// Create the main chat participant
 	const agent = new HCodeAgent(
-		() => provider,
-		() => currentModel,
 		memory,
 		statusBar,
 	);
@@ -372,7 +338,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
 	ctx.subscriptions.push(
 		vscode.workspace.onDidChangeConfiguration(e => {
 			if (e.affectsConfiguration('hcode.ai')) {
-				provider = buildProvider();
+				rebuildConfiguredProvider();
 				statusBar?.update(currentModel);
 			}
 		})
@@ -435,7 +401,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
 				return;
 			}
 			await vscode.commands.executeCommand('workbench.action.chat.open', {
-				query: 'Explain this code in detail.',
+				query: '/explain',
 			});
 		}),
 

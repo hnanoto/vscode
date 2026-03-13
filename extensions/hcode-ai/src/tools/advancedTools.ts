@@ -2,7 +2,14 @@
  *  Copyright (c) Hnanoto. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+import * as path from 'node:path';
 import * as vscode from 'vscode';
+
+function isWithinRoot(targetPath: string, root: string): boolean {
+	const normalizedRoot = path.resolve(root);
+	const normalizedTarget = path.resolve(targetPath);
+	return normalizedTarget === normalizedRoot || normalizedTarget.startsWith(`${normalizedRoot}${path.sep}`);
+}
 
 /**
  * WebSearchTool — Busca na internet usando DuckDuckGo (sem API key necessária).
@@ -117,6 +124,26 @@ export class InlineEditTool implements vscode.LanguageModelTool<{
 	newContent: string;
 	description?: string;
 }> {
+	async prepareInvocation(
+		options: vscode.LanguageModelToolInvocationPrepareOptions<{
+			filePath?: string;
+			startLine: number;
+			endLine: number;
+			newContent: string;
+			description?: string;
+		}>,
+		_token: vscode.CancellationToken
+	): Promise<vscode.PreparedToolInvocation> {
+		const target = options.input.filePath ?? 'the active editor';
+		return {
+			invocationMessage: `Editing ${target}`,
+			confirmationMessages: {
+				title: 'Apply File Edit?',
+				message: `HCode AI wants to edit ${target} (lines ${options.input.startLine}-${options.input.endLine}).`,
+			},
+		};
+	}
+
 	async invoke(
 		options: vscode.LanguageModelToolInvocationOptions<{
 			filePath?: string;
@@ -138,6 +165,9 @@ export class InlineEditTool implements vscode.LanguageModelTool<{
 					return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart('No workspace open.')]);
 				}
 				const uri = vscode.Uri.joinPath(root, filePath);
+				if (!isWithinRoot(uri.fsPath, root.fsPath)) {
+					return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart('Access denied: path is outside workspace.')]);
+				}
 				document = await vscode.workspace.openTextDocument(uri);
 			} else {
 				const editor = vscode.window.activeTextEditor;
@@ -192,6 +222,23 @@ export class CreateFileTool implements vscode.LanguageModelTool<{
 	content: string;
 	openAfterCreate?: boolean;
 }> {
+	async prepareInvocation(
+		options: vscode.LanguageModelToolInvocationPrepareOptions<{
+			filePath: string;
+			content: string;
+			openAfterCreate?: boolean;
+		}>,
+		_token: vscode.CancellationToken
+	): Promise<vscode.PreparedToolInvocation> {
+		return {
+			invocationMessage: `Creating ${options.input.filePath}`,
+			confirmationMessages: {
+				title: 'Create File?',
+				message: `HCode AI wants to create ${options.input.filePath}.`,
+			},
+		};
+	}
+
 	async invoke(
 		options: vscode.LanguageModelToolInvocationOptions<{
 			filePath: string;
@@ -210,7 +257,7 @@ export class CreateFileTool implements vscode.LanguageModelTool<{
 		const uri = vscode.Uri.joinPath(root, filePath);
 
 		// Security check
-		if (!uri.fsPath.startsWith(root.fsPath)) {
+		if (!isWithinRoot(uri.fsPath, root.fsPath)) {
 			return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart('Access denied: path is outside workspace.')]);
 		}
 

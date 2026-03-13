@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 import * as vscode from 'vscode';
-import type { IHCodeProvider, IMessage } from '../providers/baseProvider';
 import type { WorkspaceMemory } from '../memory/workspaceMemory';
 import type { HCodeAIStatusBar } from '../ui/statusBar';
+import { getProviderDisplayName } from '../providers/providerRegistry';
 import { runAgentMode } from './agentMode';
 
 const HCODE_PARTICIPANT_ID = 'hcode.ai';
@@ -33,14 +33,25 @@ Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
 Keep the description under 72 characters. Be specific and descriptive.
 Only return the commit message, nothing else.`;
 
+const COMMAND_PROMPTS: Record<string, string> = {
+	explain: 'Explain the provided code or context clearly. Cover purpose, control flow, important details, and likely edge cases.',
+	review: 'Review the provided code or context. Prioritize bugs, regressions, missing validation, incorrect assumptions, and missing tests. Present findings first.',
+	doc: 'Write concise documentation for the provided code or context. Prefer actionable documentation, doc comments, and examples when helpful.',
+};
+
+const AGENT_COMMAND_PROMPTS: Record<string, string> = {
+	fix: 'Fix bugs in the provided code or file. Apply edits directly when the correct change is clear, then verify with diagnostics.',
+	refactor: 'Refactor the provided code or file for clarity and maintainability without changing behavior. Apply edits directly and verify diagnostics.',
+	test: 'Generate or update automated tests for the provided code or file. Create or edit test files as needed, then verify diagnostics.',
+	agent: 'Complete the task autonomously using the available tools.',
+};
+
 /**
  * Main HCode AI chat agent handler.
  * Registered as the default chat participant — responds to @hcode and to the main chat panel.
  */
 export class HCodeAgent {
 	constructor(
-		private readonly getProvider: () => IHCodeProvider | undefined,
-		private readonly getModel: () => string,
 		private readonly memory: WorkspaceMemory | undefined,
 		private readonly statusBar: HCodeAIStatusBar,
 	) { }
@@ -54,18 +65,11 @@ export class HCodeAgent {
 		stream: vscode.ChatResponseStream,
 		token: vscode.CancellationToken,
 	): Promise<void> => {
-		const provider = this.getProvider();
-		if (!provider) {
-			stream.markdown('⚠️ **HCode AI is not configured.** Run `HCode AI: Configure Provider` to get started.');
-			stream.button({ command: 'hcode.ai.setup', title: 'Configure Provider' });
-			return;
-		}
-
 		this.statusBar.setLoading();
 
 		try {
-			const model = this.getModel();
-			this.statusBar.update(model);
+			const model = request.model;
+			this.statusBar.update(model.name, this.getDisplayProviderName(model.vendor));
 
 			// Handle slash commands
 			if (request.command === 'setup') {
@@ -73,23 +77,25 @@ export class HCodeAgent {
 				return;
 			}
 			if (request.command === 'commit') {
-				await this.handleCommitCommand(provider, model, stream, token);
+				await this.handleCommitCommand(model, stream, token);
 				return;
 			}
-			if (request.command === 'agent') {
-				await runAgentMode(request.prompt, provider, model, stream, token);
+			if (request.command && AGENT_COMMAND_PROMPTS[request.command]) {
+				const agentTask = await this.buildUserPrompt(request, AGENT_COMMAND_PROMPTS[request.command]);
+				const memoryContext = await this.buildMemoryContext();
+				await runAgentMode(agentTask, model, stream, token, request.toolInvocationToken, memoryContext);
 				return;
 			}
 
-			// Build message history from context
-			const messages = await this.buildMessages(request, context);
-
-			// Stream the response
-			let fullResponse = '';
-			for await (const chunk of provider.chat(messages, { model, temperature: 0.2 }, token)) {
-				stream.markdown(chunk);
-				fullResponse += chunk;
-			}
+			const messages = await this.buildMessages(request, context, COMMAND_PROMPTS[request.command ?? '']);
+			const fullResponse = await this.streamModelResponse(
+				model,
+				messages,
+				stream,
+				token,
+				'Respond to a HCode AI chat request in the editor.',
+				0.2,
+			);
 
 			// Log significant decisions to memory
 			if (this.memory && fullResponse.length > 200 && this.looksLikeDecision(request.prompt)) {
@@ -101,19 +107,22 @@ export class HCodeAgent {
 			this.statusBar.setError(message.slice(0, 40));
 			stream.markdown(`\n\n❌ **Error:** ${message}`);
 
-			if (message.includes('ECONNREFUSED') || message.includes('fetch failed')) {
+			if (message.includes('Configure HCode AI provider')) {
+				stream.button({ command: 'hcode.ai.setup', title: 'Configure Provider' });
+			}
+
+			if (request.model.vendor === 'hcode-ollama' && (message.includes('ECONNREFUSED') || message.includes('fetch failed'))) {
 				stream.markdown('\n\nIs Ollama running? Start it with: `ollama serve`');
 				stream.button({ command: 'hcode.ai.switchProvider', title: 'Switch to Cloud Provider' });
 			}
 		}
 
-		this.statusBar.update(this.getModel());
+		this.statusBar.update(request.model.name, this.getDisplayProviderName(request.model.vendor));
 	};
 
 	/** Handles /commit — generates a git commit message from staged diff. */
 	private async handleCommitCommand(
-		provider: IHCodeProvider,
-		model: string,
+		model: vscode.LanguageModelChat,
 		stream: vscode.ChatResponseStream,
 		token: vscode.CancellationToken,
 	): Promise<void> {
@@ -154,67 +163,90 @@ export class HCodeAgent {
 		}
 
 		stream.markdown('Generating commit message...\n\n');
-		const messages: IMessage[] = [
-			{ role: 'system', content: COMMIT_PROMPT },
-			{ role: 'user', content: `Git diff:\n\`\`\`diff\n${diff.slice(0, 6000)}\n\`\`\`` },
+		const messages: vscode.LanguageModelChatMessage[] = [
+			vscode.LanguageModelChatMessage.User(
+				`${COMMIT_PROMPT}\n\nGit diff:\n\`\`\`diff\n${diff.slice(0, 6000)}\n\`\`\``
+			),
 		];
 
-		for await (const chunk of provider.chat(messages, { model, temperature: 0.1 }, token)) {
-			stream.markdown(chunk);
-		}
+		await this.streamModelResponse(
+			model,
+			messages,
+			stream,
+			token,
+			'Generate a conventional commit message from the staged git diff.',
+			0.1,
+		);
 	}
 
-	/** Builds the full message array including system prompt, memory, and history. */
+	/** Builds the full message array including instructions, memory, and history. */
 	private async buildMessages(
 		request: vscode.ChatRequest,
 		context: vscode.ChatContext,
-	): Promise<IMessage[]> {
-		const messages: IMessage[] = [];
-
-		// System prompt
-		let systemContent = SYSTEM_PROMPT;
-
-		// Inject workspace memory
-		if (this.memory) {
-			const memContext = await this.memory.loadSystemContext();
-			if (memContext) {
-				systemContent += `\n\n${memContext}`;
-			}
-		}
-		messages.push({ role: 'system', content: systemContent });
+		commandPrompt?: string,
+	): Promise<vscode.LanguageModelChatMessage[]> {
+		const messages: vscode.LanguageModelChatMessage[] = [
+			vscode.LanguageModelChatMessage.User(await this.buildInstructionPrompt()),
+		];
 
 		// Conversation history (last 10 turns)
 		const history = context.history.slice(-10);
 		for (const turn of history) {
 			if (turn instanceof vscode.ChatRequestTurn) {
-				messages.push({ role: 'user', content: turn.prompt });
+				messages.push(vscode.LanguageModelChatMessage.User(turn.prompt));
 			} else if (turn instanceof vscode.ChatResponseTurn) {
 				const text = turn.response
 					.filter((p): p is vscode.ChatResponseMarkdownPart => p instanceof vscode.ChatResponseMarkdownPart)
 					.map(p => p.value.value)
 					.join('');
 				if (text) {
-					messages.push({ role: 'assistant', content: text });
+					messages.push(vscode.LanguageModelChatMessage.Assistant(text));
 				}
 			}
 		}
 
-		// Current selected editor context
+		messages.push(vscode.LanguageModelChatMessage.User(await this.buildUserPrompt(request, commandPrompt)));
+		return messages;
+	}
+
+	private async buildInstructionPrompt(): Promise<string> {
+		let prompt = `Follow these instructions for the HCode AI conversation:\n\n${SYSTEM_PROMPT}`;
+		const memContext = await this.buildMemoryContext();
+		if (memContext) {
+			prompt += `\n\nWorkspace memory:\n${memContext}`;
+		}
+		return prompt;
+	}
+
+	private async buildMemoryContext(): Promise<string> {
+		if (!this.memory) {
+			return '';
+		}
+		return await this.memory.loadSystemContext();
+	}
+
+	private async buildUserPrompt(
+		request: vscode.ChatRequest,
+		commandPrompt?: string,
+	): Promise<string> {
 		const editor = vscode.window.activeTextEditor;
-		let userContent = request.prompt;
+		const prompt = request.prompt.trim();
+		const promptBody = commandPrompt
+			? `${commandPrompt}${prompt ? `\n\nUser request:\n${prompt}` : ''}`
+			: prompt;
+		let userContent = promptBody || 'Use the attached editor context to respond.';
 
 		if (editor?.selection && !editor.selection.isEmpty) {
 			const selection = editor.document.getText(editor.selection);
 			const lang = editor.document.languageId;
 			const file = vscode.workspace.asRelativePath(editor.document.uri);
 			const startLine = editor.selection.start.line + 1;
-			userContent = `File: ${file} (line ${startLine})\n\`\`\`${lang}\n${selection}\n\`\`\`\n\n${request.prompt}`;
-		} else if (editor && !editor.selection.isEmpty) {
+			userContent = `File: ${file} (line ${startLine})\n\`\`\`${lang}\n${selection}\n\`\`\`\n\n${userContent}`;
+		} else if (editor) {
 			const file = vscode.workspace.asRelativePath(editor.document.uri);
-			userContent = `Current file: ${file}\n\n${request.prompt}`;
+			userContent = `Current file: ${file}\n\n${userContent}`;
 		}
 
-		// Referenced files/variables from #file mentions
 		for (const ref of request.references ?? []) {
 			if (ref.value instanceof vscode.Uri) {
 				try {
@@ -227,8 +259,39 @@ export class HCodeAgent {
 			}
 		}
 
-		messages.push({ role: 'user', content: userContent });
-		return messages;
+		return userContent;
+	}
+
+	private async streamModelResponse(
+		model: vscode.LanguageModelChat,
+		messages: vscode.LanguageModelChatMessage[],
+		stream: vscode.ChatResponseStream,
+		token: vscode.CancellationToken,
+		justification: string,
+		temperature: number,
+		maxTokens?: number,
+	): Promise<string> {
+		const modelOptions: Record<string, number> = { temperature };
+		if (typeof maxTokens === 'number') {
+			modelOptions.maxTokens = maxTokens;
+		}
+
+		const response = await model.sendRequest(messages, {
+			justification,
+			modelOptions,
+		}, token);
+
+		let fullResponse = '';
+		for await (const chunk of response.text) {
+			stream.markdown(chunk);
+			fullResponse += chunk;
+		}
+
+		return fullResponse;
+	}
+
+	private getDisplayProviderName(vendor: string): string {
+		return getProviderDisplayName(vendor) ?? vendor;
 	}
 
 	private looksLikeDecision(prompt: string): boolean {

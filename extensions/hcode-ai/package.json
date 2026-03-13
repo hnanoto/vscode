@@ -1,7 +1,7 @@
 {
 	"name": "hcode-ai",
 	"displayName": "HCode AI",
-	"description": "Built-in AI assistant for HCode. Supports Ollama (local), Google Gemini, OpenAI/Codex, Anthropic Claude and more.",
+	"description": "Built-in AI assistant for HCode. Supports Ollama, Gemini, Groq, GitHub Models, OpenRouter, OpenAI, Anthropic and more.",
 	"version": "1.0.0",
 	"publisher": "hcode",
 	"license": "MIT",
@@ -34,7 +34,7 @@
 				"id": "hcode.ai",
 				"fullName": "HCode AI",
 				"name": "hcode",
-				"description": "Your built-in AI coding assistant — works with Ollama, Gemini, OpenAI, Claude and more",
+				"description": "Your built-in AI coding assistant — works with Ollama, Gemini, Groq, GitHub Models, OpenRouter, OpenAI, Claude and more",
 				"isDefault": true,
 				"commands": [
 					{
@@ -68,23 +68,60 @@
 					{
 						"name": "setup",
 						"description": "Configure HCode AI provider and model"
+					},
+					{
+						"name": "agent",
+						"description": "Run the autonomous coding agent on the current task"
 					}
 				],
 				"when": "config.hcode.ai.enabled"
 			}
 		],
-		"languageModels": [
+		"languageModelChatProviders": [
 			{
-				"vendor": "hcode-ollama"
+				"vendor": "hcode-ollama",
+				"displayName": "Ollama (Local)",
+				"when": "config.hcode.ai.enabled"
 			},
 			{
-				"vendor": "hcode-gemini"
+				"vendor": "hcode-gemini",
+				"displayName": "Google Gemini",
+				"when": "config.hcode.ai.enabled"
 			},
 			{
-				"vendor": "hcode-openai"
+				"vendor": "hcode-groq",
+				"displayName": "Groq",
+				"when": "config.hcode.ai.enabled"
 			},
 			{
-				"vendor": "hcode-anthropic"
+				"vendor": "hcode-github",
+				"displayName": "GitHub Models",
+				"when": "config.hcode.ai.enabled"
+			},
+			{
+				"vendor": "hcode-openrouter",
+				"displayName": "OpenRouter",
+				"when": "config.hcode.ai.enabled"
+			},
+			{
+				"vendor": "hcode-deepseek",
+				"displayName": "DeepSeek",
+				"when": "config.hcode.ai.enabled"
+			},
+			{
+				"vendor": "hcode-openai",
+				"displayName": "OpenAI / Codex",
+				"when": "config.hcode.ai.enabled"
+			},
+			{
+				"vendor": "hcode-anthropic",
+				"displayName": "Anthropic Claude",
+				"when": "config.hcode.ai.enabled"
+			},
+			{
+				"vendor": "hcode-grok",
+				"displayName": "Grok (xAI)",
+				"when": "config.hcode.ai.enabled"
 			}
 		],
 		"languageModelTools": [
@@ -235,6 +272,66 @@
 					},
 					"required": ["query"]
 				}
+			},
+			{
+				"name": "hcode_inlineEdit",
+				"displayName": "Inline Edit",
+				"toolReferenceName": "inlineEdit",
+				"canBeReferencedInPrompt": false,
+				"modelDescription": "Applies a targeted edit to a file or to the active editor selection.",
+				"userDescription": "Edit code directly in a workspace file.",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"filePath": {
+							"type": "string",
+							"description": "Optional relative path to the file. Uses the active editor when omitted."
+						},
+						"startLine": {
+							"type": "number",
+							"description": "First line to replace (1-indexed)"
+						},
+						"endLine": {
+							"type": "number",
+							"description": "Last line to replace (1-indexed)"
+						},
+						"newContent": {
+							"type": "string",
+							"description": "Replacement content"
+						},
+						"description": {
+							"type": "string",
+							"description": "Optional short description of the edit"
+						}
+					},
+					"required": ["startLine", "endLine", "newContent"]
+				}
+			},
+			{
+				"name": "hcode_createFile",
+				"displayName": "Create File",
+				"toolReferenceName": "createFile",
+				"canBeReferencedInPrompt": false,
+				"modelDescription": "Creates a new file in the workspace with the provided content.",
+				"userDescription": "Create a new file in the workspace.",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"filePath": {
+							"type": "string",
+							"description": "Relative path to the new file from the workspace root"
+						},
+						"content": {
+							"type": "string",
+							"description": "Full file content"
+						},
+						"openAfterCreate": {
+							"type": "boolean",
+							"description": "Open the file after creating it. Defaults to true."
+						}
+					},
+					"required": ["filePath", "content"]
+				}
 			}
 		],
 		"configuration": {
@@ -248,12 +345,17 @@
 				},
 				"hcode.ai.provider": {
 					"type": "string",
-					"enum": ["ollama", "gemini", "openai", "anthropic"],
+					"enum": ["ollama", "gemini", "groq", "github", "openrouter", "deepseek", "openai", "anthropic", "grok"],
 					"enumDescriptions": [
 						"Ollama — run models locally (free, private, no internet required)",
-						"Google Gemini — Google's AI models (free tier available)",
-						"OpenAI / Codex — GPT-4, GPT-4o, Codex and compatible APIs",
-						"Anthropic Claude — Claude 3.5, Claude 3 Haiku, etc."
+						"Google Gemini — Gemini Developer API with a free tier",
+						"Groq — hosted models with a free plan and rate limits",
+						"GitHub Models — included free, rate-limited usage per GitHub account",
+						"OpenRouter — access free community models and provider routing",
+						"DeepSeek — low-cost API; granted balance may apply when available",
+						"OpenAI / Codex — GPT, reasoning and compatible APIs",
+						"Anthropic Claude — Claude Sonnet, Opus, Haiku and more",
+						"Grok (xAI) — paid xAI API access"
 					],
 					"default": "ollama",
 					"description": "AI provider to use for HCode AI",
@@ -279,15 +381,63 @@
 				},
 				"hcode.ai.gemini.model": {
 					"type": "string",
-					"enum": ["gemini-2.5-pro-exp-03-25", "gemini-2.0-flash", "gemini-2.0-flash-thinking-exp", "gemini-1.5-pro"],
+					"enum": ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-2.0-flash"],
 					"enumDescriptions": [
-						"Gemini 2.5 Pro (experimental) — most capable",
-						"Gemini 2.0 Flash — fast and free",
-						"Gemini 2.0 Flash Thinking — reasoning model",
-						"Gemini 1.5 Pro — stable production model"
+						"Gemini 2.5 Flash — best default with free tier support",
+						"Gemini 2.5 Flash-Lite — fastest and cheapest option",
+						"Gemini 2.5 Pro — most capable, may require paid tier",
+						"Gemini 2.0 Flash — older free-tier model"
 					],
-					"default": "gemini-2.0-flash",
+					"default": "gemini-2.5-flash",
 					"description": "Google Gemini model to use",
+					"scope": "application"
+				},
+				"hcode.ai.groq.apiKey": {
+					"type": "string",
+					"default": "",
+					"description": "Groq API key (free plan with rate limits available at console.groq.com)",
+					"scope": "application"
+				},
+				"hcode.ai.groq.model": {
+					"type": "string",
+					"default": "qwen/qwen3-32b",
+					"description": "Groq model to use (for example qwen/qwen3-32b, openai/gpt-oss-120b, moonshotai/kimi-k2-instruct)",
+					"scope": "application"
+				},
+				"hcode.ai.github.token": {
+					"type": "string",
+					"default": "",
+					"description": "GitHub token for GitHub Models (includes free, rate-limited usage per account)",
+					"scope": "application"
+				},
+				"hcode.ai.github.model": {
+					"type": "string",
+					"default": "gpt-4o-mini",
+					"description": "GitHub Models model to use (for example gpt-4o-mini, gpt-4.1-mini, Phi-4)",
+					"scope": "application"
+				},
+				"hcode.ai.openrouter.apiKey": {
+					"type": "string",
+					"default": "",
+					"description": "OpenRouter API key (free router and free community models available)",
+					"scope": "application"
+				},
+				"hcode.ai.openrouter.model": {
+					"type": "string",
+					"default": "openrouter/free",
+					"description": "OpenRouter model to use (for example openrouter/free or a specific provider/model slug)",
+					"scope": "application"
+				},
+				"hcode.ai.deepseek.apiKey": {
+					"type": "string",
+					"default": "",
+					"description": "DeepSeek API key (low cost; granted balance is used first when available)",
+					"scope": "application"
+				},
+				"hcode.ai.deepseek.model": {
+					"type": "string",
+					"default": "deepseek-chat",
+					"description": "DeepSeek model to use (for example deepseek-chat or deepseek-reasoner)",
 					"scope": "application"
 				},
 				"hcode.ai.openai.apiKey": {
@@ -334,6 +484,18 @@
 					],
 					"default": "claude-sonnet-4-5",
 					"description": "Anthropic Claude model to use",
+					"scope": "application"
+				},
+				"hcode.ai.grok.apiKey": {
+					"type": "string",
+					"default": "",
+					"description": "xAI API key for Grok",
+					"scope": "application"
+				},
+				"hcode.ai.grok.model": {
+					"type": "string",
+					"default": "grok-4",
+					"description": "Grok model to use (for example grok-4, grok-3-mini or grok-code-fast-1)",
 					"scope": "application"
 				},
 				"hcode.ai.memory.enabled": {

@@ -2,6 +2,7 @@
  *  Copyright (c) Hnanoto. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 /** Returns workspace root path or undefined. */
@@ -9,25 +10,20 @@ function workspaceRoot(): string | undefined {
 	return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 }
 
+function isWithinRoot(targetPath: string, root: string): boolean {
+	const normalizedRoot = path.resolve(root);
+	const normalizedTarget = path.resolve(targetPath);
+	return normalizedTarget === normalizedRoot || normalizedTarget.startsWith(`${normalizedRoot}${path.sep}`);
+}
+
 /** Runs a shell command and returns stdout+stderr. Uses the VS Code shell task API to avoid needing child_process types. */
 function runShell(command: string, cwd: string, token: vscode.CancellationToken): Promise<string> {
 	return new Promise(resolve => {
-		// Use ShellExecution via vscode task system
-		const task = new vscode.Task(
-			{ type: 'hcode-ai-shell' },
-			vscode.TaskScope.Workspace,
-			'hcode-ai-shell',
-			'HCode AI',
-			new vscode.ShellExecution(command, { cwd }),
-		);
-		task.presentationOptions = { reveal: vscode.TaskRevealKind.Never, panel: vscode.TaskPanelKind.Dedicated };
-
-		// Fallback: use exec via shell
-		// We use a simpler approach to avoid child_process types: ShellExecution captures output via a temp file
+		// Use ShellExecution plus a temp file so we can collect output in the extension host.
 		const tmpOut = vscode.Uri.joinPath(vscode.Uri.file(cwd), `.hcode-ai-tmp-${Date.now()}.txt`).fsPath;
-	const wrappedCmd = vscode.env.appHost === 'desktop'
-		? `${command} > "${tmpOut}" 2>&1`
-		: `${command} > "${tmpOut}" 2>&1`;
+		const wrappedCmd = vscode.env.appHost === 'desktop'
+			? `${command} > "${tmpOut}" 2>&1`
+			: `${command} > "${tmpOut}" 2>&1`;
 
 		const wrappedTask = new vscode.Task(
 			{ type: 'hcode-ai-shell' },
@@ -80,7 +76,7 @@ export class ReadFileTool implements vscode.LanguageModelTool<{ filePath: string
 
 		const uri = vscode.Uri.joinPath(vscode.Uri.file(root), options.input.filePath);
 		// Security: prevent path traversal outside workspace
-		if (!uri.fsPath.startsWith(root)) {
+		if (!isWithinRoot(uri.fsPath, root)) {
 			return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart('Access denied: path is outside workspace.')]);
 		}
 
@@ -118,7 +114,7 @@ export class ListDirectoryTool implements vscode.LanguageModelTool<{ dirPath: st
 		}
 
 		const dirUri = vscode.Uri.joinPath(vscode.Uri.file(root), options.input.dirPath);
-		if (!dirUri.fsPath.startsWith(root)) {
+		if (!isWithinRoot(dirUri.fsPath, root)) {
 			return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart('Access denied: path is outside workspace.')]);
 		}
 
@@ -162,6 +158,21 @@ export class ListDirectoryTool implements vscode.LanguageModelTool<{ dirPath: st
 // ─── Run Terminal Tool ─────────────────────────────────────────────────────────
 
 export class RunTerminalTool implements vscode.LanguageModelTool<{ command: string; cwd?: string }> {
+	async prepareInvocation(
+		options: vscode.LanguageModelToolInvocationPrepareOptions<{ command: string; cwd?: string }>,
+		_token: vscode.CancellationToken
+	): Promise<vscode.PreparedToolInvocation> {
+		const cwd = options.input.cwd ?? '.';
+		const autoApprove = vscode.workspace.getConfiguration('hcode.ai').get<boolean>('agent.autoApproveTerminal') ?? false;
+		return {
+			invocationMessage: `Running terminal command in ${cwd}`,
+			confirmationMessages: autoApprove ? undefined : {
+				title: 'Run Terminal Command?',
+				message: `HCode AI wants to run:\n\n${options.input.command}\n\nWorking directory: ${cwd}`,
+			},
+		};
+	}
+
 	async invoke(
 		options: vscode.LanguageModelToolInvocationOptions<{ command: string; cwd?: string }>,
 		token: vscode.CancellationToken
@@ -170,6 +181,11 @@ export class RunTerminalTool implements vscode.LanguageModelTool<{ command: stri
 		const cwd = options.input.cwd
 			? vscode.Uri.joinPath(vscode.Uri.file(root), options.input.cwd).fsPath
 			: root;
+		if (!isWithinRoot(cwd, root)) {
+			return new vscode.LanguageModelToolResult([
+				new vscode.LanguageModelTextPart('Access denied: cwd is outside workspace.')
+			]);
+		}
 
 		const output = await runShell(options.input.command, cwd, token);
 		return new vscode.LanguageModelToolResult([
