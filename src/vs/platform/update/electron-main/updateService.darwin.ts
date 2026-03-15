@@ -175,7 +175,11 @@ export class DarwinUpdateService extends AbstractUpdateService implements IRelau
 		
 		// For static JSON hosting (like GitHub pages), an empty {} means no update,
 		// but Mac autoUpdater fails with a parse error trying to read it. Check first:
-		this.requestService.request({ url, headers: getUpdateRequestHeaders(this.productService.version) }, CancellationToken.None).then(async context => {
+		this.requestService.request({
+			url,
+			headers: getUpdateRequestHeaders(this.productService.version),
+			callSite: 'updateService.darwin.preCheckForUpdates'
+		}, CancellationToken.None).then(async context => {
 			if (context.res.statusCode === 204) {
 				this.onUpdateNotAvailable();
 				return;
